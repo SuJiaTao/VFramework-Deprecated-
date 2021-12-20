@@ -198,7 +198,7 @@ VFAPI void vfInit(void)
 	_bBSize = VF_BUFFER_SIZE_INIT;
 
 	/* init module main thread */
-	_fThread = CreateThread(NULL, NULL, vfMain, NULL, NULL, &_fThread);
+	_fThread = CreateThread(0, 0, vfMain, 0, 0, &_fThread);
 }
 
 VFAPI void vfTerminate(void)
@@ -219,6 +219,16 @@ VFAPI vfVector vfCreateVector(float x, float y)
 	vfVector rVec;
 	rVec.x = x; rVec.y = y;
 	return rVec;
+}
+
+VFAPI vfColor vfCreateColor(int r, int g, int b, int a)
+{
+	vfColor rCol;
+	rCol.r = r;
+	rCol.g = g;
+	rCol.b = b;
+	rCol.a = a;
+	return rCol;
 }
 
 VFAPI vfTransform* vfCreateTransformv(vfVector vector)
@@ -308,14 +318,16 @@ VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
 
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
+	rParticle->layer = 0;
 	rParticle->active = TRUE;
+	rParticle->bias = vfCreateColor(255, 255, 255, 255);
 	rParticle->transform = transform;
 
 	return rParticle;
 }
 
 VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
-	vgShape* shape)
+	vgShape shape, unsigned char layer)
 {
 	/* get free spot */
 	int pIndex = findBufferSpot(&_pBuffer, &_pBufferField, &_pBSize,
@@ -325,6 +337,8 @@ VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
 	rParticle->active = TRUE;
+	rParticle->layer = layer;
+	rParticle->bias = vfCreateColor(255, 255, 255, 255);
 	rParticle->texture = texture;
 	rParticle->shape = shape;
 	rParticle->transform = transform;
@@ -371,17 +385,17 @@ VFAPI vfHandle vfGetParticleHandle(vfParticle* particle)
 
 VFAPI vfTransform* vfGetTransform(vfHandle hndl)
 {
-	return &(_tBuffer[hndl]);
+	return _tBuffer + hndl;
 }
 
 VFAPI vfBound* vfGetBound(vfHandle hndl)
 {
-	return &(_bBuffer[hndl]);
+	return _bBuffer + hndl;
 }
 
 VFAPI vfParticle* vfGetParticle(vfHandle hndl)
 {
-	return &(_pBuffer[hndl]);
+	return _pBuffer + hndl;
 }
 
 /* RENDERING FUNCTIONS */
@@ -402,8 +416,14 @@ VFAPI void vfRenderParticles(void)
 		int tIndex = rTransform - _tBuffer;
 		vfTransform tFinal = _tFinalBuffer[tIndex];
 
+		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
+		vgTextureFilter(render.bias.r, render.bias.g, render.bias.b,
+			render.bias.a);
 		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
 			tFinal.rotation, tFinal.scale);
+
+		vgTextureFilterReset();
+		vgRenderLayer(0);
 	}
 }

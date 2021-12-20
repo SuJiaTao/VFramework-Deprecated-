@@ -75,6 +75,7 @@ typedef struct vfBound
 typedef struct vfParticle
 {
 	int active;
+	unsigned char layer;
 	vgShape shape;
 	vgTexture texture;
 	vfColor bias;
@@ -93,6 +94,7 @@ VFAPI void vfThreadSleepTime(unsigned int miliseconds);
 
 /* STRUCT CREATION FUNCTIONS */
 VFAPI vfVector vfCreateVector(float x, float y);
+VFAPI vfColor vfCreateColor(int r, int g, int b, int a);
 VFAPI vfTransform* vfCreateTransformv(vfVector vector);
 VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
 	float scale);
@@ -102,7 +104,7 @@ VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 	vfVector dimensions);
 VFAPI vfParticle* vfCreateParticlet(vfTransform* transform);
 VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
-	vgShape* shape);
+	vgShape shape, unsigned char layer);
 
 /* STRUCT DESTRUCTION FUNCTIONS */
 VFAPI void vfDestroyTransform(vfTransform* transform);
