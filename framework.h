@@ -13,6 +13,8 @@
 *		- Module initialization function
 *		- Module termination function
 *		- Struct creation functions
+*		- Struct destruction functions
+*		- Rendering functions
 * 
 ******************************************************************************/
 
@@ -57,7 +59,6 @@ typedef struct vfTransform
 	float scale;
 
 	struct vfTransform* parent;
-	struct vfTransform* child[VF_MAX_CHILDREN];
 } vfTransform;
 
 typedef struct vfBound
@@ -76,8 +77,7 @@ typedef struct vfParticle
 	vgTexture texture;
 	vfColor bias;
 
-	vfTransform transform;
-	vfBound bound;
+	vfTransform* transform;
 } vfParticle;
 
 /* MODULE INIT AND TERMINATE FUNCTIONS */
@@ -93,5 +93,16 @@ VFAPI vfTransform* vfCreateTransformp(vfTransform* parent);
 VFAPI vfBound* vfCreateBoundt(vfTransform* body);
 VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 	vfVector dimensions);
+VFAPI vfParticle* vfCreateParticlet(vfTransform* transform);
+VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
+	vgShape* shape);
+
+/* STRUCT DESTRUCTION FUNCTIONS */
+VFAPI void vfDestroyTransform(vfTransform* transform);
+VFAPI void vfDestroyBound(vfBound* bound);
+VFAPI void vfDestroyParticle(vfParticle* particle);
+
+/* RENDERING FUNCTIONS */
+VFAPI void vfRenderParticles(void);
 
 #endif 
