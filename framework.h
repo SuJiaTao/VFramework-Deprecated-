@@ -12,8 +12,10 @@
 *		- Structs
 *		- Module initialization function
 *		- Module termination function
+*		- Module threading related functions
 *		- Struct creation functions
 *		- Struct destruction functions
+*		- Struct related functions
 *		- Rendering functions
 * 
 ******************************************************************************/
@@ -36,6 +38,7 @@
 
 #define VF_BUFFER_SIZE_INIT 0x60
 #define VF_BUFFER_SIZE_INCREMENT 0x30
+#define VF_PARENT_SEARCH_THRESHOLD 0x20
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -72,7 +75,6 @@ typedef struct vfBound
 typedef struct vfParticle
 {
 	int active;
-	int visible;
 	vgShape shape;
 	vgTexture texture;
 	vfColor bias;
@@ -80,9 +82,14 @@ typedef struct vfParticle
 	vfTransform* transform;
 } vfParticle;
 
+typedef unsigned int vfHandle;
+
 /* MODULE INIT AND TERMINATE FUNCTIONS */
 VFAPI void vfInit(void);
 VFAPI void vfTerminate(void);
+
+/* THREADING RELATED FUNCTIONS */
+VFAPI void vfThreadSleepTime(unsigned int miliseconds);
 
 /* STRUCT CREATION FUNCTIONS */
 VFAPI vfVector vfCreateVector(float x, float y);
@@ -101,6 +108,14 @@ VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 VFAPI void vfDestroyTransform(vfTransform* transform);
 VFAPI void vfDestroyBound(vfBound* bound);
 VFAPI void vfDestroyParticle(vfParticle* particle);
+
+/* STRUCT RELATED FUNCTIONS */
+VFAPI vfHandle vfGetTransformHandle(vfTransform* transform);
+VFAPI vfHandle vfGetBoundHandle(vfBound* bound);
+VFAPI vfHandle vfGetParticleHandle(vfParticle* particle);
+VFAPI vfTransform* vfGetTransform(vfHandle hndl);
+VFAPI vfBound* vfGetBound(vfHandle hndl);
+VFAPI vfParticle* vfGetParticle(vfHandle hndl);
 
 /* RENDERING FUNCTIONS */
 VFAPI void vfRenderParticles(void);

@@ -32,6 +32,7 @@
 
 static HANDLE _fThread; /* thread handle */
 static HANDLE _heap; /* heap handle */
+static unsigned int _sleepTime;
 /* internal buffers */
 static vfTransform* _tBuffer; static int* _tBufferField; static int _tBSize;
 static vfTransform* _tFinalBuffer;
@@ -90,8 +91,15 @@ static DWORD WINAPI vfMain(void* params)
 {
 	while(1)
 	{
+		/* sleep (optional) */
+		if (_sleepTime)
+		{
+			Sleep(_sleepTime);
+		}
+
 		/* update FINAL transform objects */
 		int iSize = _tBSize;
+		int pCounter = 0;
 
 		for (int i = 0; i < iSize; i++)
 		{
@@ -107,6 +115,10 @@ static DWORD WINAPI vfMain(void* params)
 
 			while (tParent != NULL)
 			{
+				/* makes sure not to get stuck in an infinte loop */
+				pCounter++;
+				if (pCounter > VF_PARENT_SEARCH_THRESHOLD) break;
+
 				/* recall that tValue is a LOCAL position */
 				/* relative to the parent transform */
 				/* the goal of this function is to convert it */
@@ -158,6 +170,7 @@ VFAPI void vfInit(void)
 	_heap = GetProcessHeap();
 
 	/* init module internal data */
+	_sleepTime = 0;
 
 	/* INIT TRANSFORM BUFFER */
 	_tBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
@@ -191,6 +204,12 @@ VFAPI void vfInit(void)
 VFAPI void vfTerminate(void)
 {
 	TerminateThread(_fThread, 1);
+}
+
+/* THREADING RELATED FUNCTIONS */
+VFAPI void vfThreadSleepTime(unsigned int miliseconds)
+{
+	_sleepTime = miliseconds;
 }
 
 /* STRUCT CREATION FUNCTIONS */
@@ -289,6 +308,7 @@ VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
 
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
+	rParticle->active = TRUE;
 	rParticle->transform = transform;
 
 	return rParticle;
@@ -304,6 +324,7 @@ VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
+	rParticle->active = TRUE;
 	rParticle->texture = texture;
 	rParticle->shape = shape;
 	rParticle->transform = transform;
@@ -315,41 +336,52 @@ VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 
 VFAPI void vfDestroyTransform(vfTransform* transform)
 {
-	/* search for matching pointer */
-	for (int i = 0; i < _tBSize; i++)
-	{
-		if (_tBuffer + i == transform)
-		{
-			_tBufferField[i] = 0;
-			return;
-		}
-	}
+	int tIndex = transform - _tBuffer;
+	_tBufferField[tIndex] = 0;
 }
 
 VFAPI void vfDestroyBound(vfBound* bound)
 {
-	/* search for matching pointer */
-	for (int i = 0; i < _bBSize; i++)
-	{
-		if (_bBuffer + i == bound)
-		{
-			_bBufferField[i] = 0;
-			return;
-		}
-	}
+	int bIndex = bound - _bBuffer;
+	_bBufferField[bIndex] = 0;
 }
 
 VFAPI void vfDestroyParticle(vfParticle* particle)
 {
-	/* search for matching pointer */
-	for (int i = 0; i < _pBSize; i++)
-	{
-		if (_pBuffer + i == particle)
-		{
-			_pBufferField[i] = 0;
-			return;
-		}
-	}
+	int pIndex = particle - _pBuffer;
+	_pBufferField[pIndex] = 0;
+}
+
+/* STRUCT RELATED FUNCTIONS */
+
+VFAPI vfHandle vfGetTransformHandle(vfTransform* transform)
+{
+	return transform - _tBuffer;
+}
+
+VFAPI vfHandle vfGetBoundHandle(vfBound* bound)
+{
+	return bound - _bBuffer;
+}
+
+VFAPI vfHandle vfGetParticleHandle(vfParticle* particle)
+{
+	return particle - _pBuffer;
+}
+
+VFAPI vfTransform* vfGetTransform(vfHandle hndl)
+{
+	return &(_tBuffer[hndl]);
+}
+
+VFAPI vfBound* vfGetBound(vfHandle hndl)
+{
+	return &(_bBuffer[hndl]);
+}
+
+VFAPI vfParticle* vfGetParticle(vfHandle hndl)
+{
+	return &(_pBuffer[hndl]);
 }
 
 /* RENDERING FUNCTIONS */
@@ -360,9 +392,10 @@ VFAPI void vfRenderParticles(void)
 
 	for (int i = 0; i < rCount; i++)
 	{
-		if (_pBufferField[i] == 0) continue;
-
+		if (!_pBufferField[i]) continue;
+		
 		vfParticle render = _pBuffer[i];
+		if (!render.active) continue;
 
 		/* get FINAL transform */
 		vfTransform* rTransform = render.transform;
