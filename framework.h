@@ -40,6 +40,9 @@
 #define VF_BUFFER_SIZE_INCREMENT 0x30
 #define VF_PARENT_SEARCH_THRESHOLD 0x20
 
+#define VECT(x, y) vfCreateVector(x, y)
+#define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
+
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
 {
@@ -78,10 +81,35 @@ typedef struct vfParticle
 	unsigned char layer;
 	vgShape shape;
 	vgTexture texture;
-	vfColor bias;
+	vfColor filter;
 
 	vfTransform* transform;
 } vfParticle;
+
+typedef struct vfPhysics
+{
+	int active;
+	int moveable;
+	float bounciness;
+	float drag;
+	float mass;
+
+	vfVector velocity;
+	float tourque;
+} vfPhysics;
+
+typedef struct vfEntity
+{
+	int active;
+	unsigned char layer;
+	vgTexture texture;
+	vgShape shape;
+	vfColor filter;
+
+	vfBound* bounds;
+	vfPhysics physics;
+	vfTransform* transform;
+} vfEntity;
 
 typedef unsigned int vfHandle;
 
@@ -105,6 +133,10 @@ VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 VFAPI vfParticle* vfCreateParticlet(vfTransform* transform);
 VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 	vgShape shape, unsigned char layer);
+VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass);
+VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape, 
+	vgTexture texture, vfPhysics physics, vfVector boundPosition, 
+	vfVector boundDimensions);
 
 /* STRUCT DESTRUCTION FUNCTIONS */
 VFAPI void vfDestroyTransform(vfTransform* transform);
@@ -121,5 +153,7 @@ VFAPI vfParticle* vfGetParticle(vfHandle hndl);
 
 /* RENDERING FUNCTIONS */
 VFAPI void vfRenderParticles(void);
+VFAPI void vfRenderEntities(void);
+VFAPI void vfRenderBounds(void);
 
 #endif 
