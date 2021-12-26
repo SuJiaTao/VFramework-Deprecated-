@@ -103,6 +103,83 @@ static inline vfVector vertRotateScale(vfVector vertex, float angle,
 	return vfCreateVector(posX, posY);
 }
 
+/* COLLISIONCHECK FUNCTION */
+static inline int collisionCheck(boundQuad* source, boundQuad* target)
+{
+	int overlapCount = 0;
+
+	/* for every line on the source quad */
+	for (int i = 0; i < 4; i++)
+	{
+		/* grab an edge */
+		vfVector p1 = source->vectors[i];
+		vfVector p2 = source->vectors[(i + 1) % 4];
+
+		/* get it's axis */
+		vfVector axis = VECT(p2.x - p1.x, p2.y - p1.y);
+
+		/* get angle */
+		const float axisAngle = atan2(axis.y, axis.x);
+
+		/* grab bounds */
+		boundQuad tformSource = *source;
+		boundQuad tformTarget = *target;
+		for (int j = 0; j < 4; j++)
+		{
+			/* rotate so that "axis" is origin */
+			tformSource.vectors[j] = vertRotateScale(tformSource.vectors[j],
+				axisAngle, 1);
+			tformTarget.vectors[j] = vertRotateScale(tformTarget.vectors[j],
+				axisAngle, 1);
+		}
+
+		/* get min and max of each set of vertexes */
+		float sMin = min(min(tformSource.vectors[0].y, tformSource.vectors[1].y),
+			min(tformSource.vectors[2].y, tformSource.vectors[3].y));
+		float sMax = max(max(tformSource.vectors[0].y, tformSource.vectors[1].y),
+			max(tformSource.vectors[2].y, tformSource.vectors[3].y));
+		float tMin = min(min(tformTarget.vectors[0].y, tformTarget.vectors[1].y),
+			min(tformTarget.vectors[2].y, tformTarget.vectors[3].y));
+		float tMax = max(max(tformTarget.vectors[0].y, tformTarget.vectors[1].y),
+			max(tformTarget.vectors[2].y, tformTarget.vectors[3].y));
+
+		/* check for overlap */
+		if (max(sMax, tMax) - min(sMin, tMin) > (sMax - sMin) + (tMax - tMin))
+		{
+			puts("FOUND OVERLAP!");
+			source->collisions++;
+			target->collisions++;
+			overlapCount++;
+		}
+
+		sMin = min(min(tformSource.vectors[0].x, tformSource.vectors[1].x),
+			min(tformSource.vectors[2].x, tformSource.vectors[3].x));
+		sMax = max(max(tformSource.vectors[0].x, tformSource.vectors[1].x),
+			max(tformSource.vectors[2].x, tformSource.vectors[3].x));
+		tMin = min(min(tformTarget.vectors[0].x, tformTarget.vectors[1].x),
+			min(tformTarget.vectors[2].x, tformTarget.vectors[3].x));
+		tMax = max(max(tformTarget.vectors[0].x, tformTarget.vectors[1].x),
+			max(tformTarget.vectors[2].x, tformTarget.vectors[3].x));
+
+		/* check for overlap */
+		if (max(sMax, tMax) - min(sMin, tMin) > (sMax - sMin) + (tMax - tMin))
+		{
+			puts("FOUND OVERLAP!");
+			source->collisions++;
+			target->collisions++;
+			overlapCount++;
+		}
+	}
+
+	if (overlapCount == 3)
+	{
+		source->collisions++;
+		target->collisions++;
+		return 1;
+	}
+	return 0;
+}
+
 /* VERTEX AVERAGING FUNCTIONS */
 static inline vfVector vertexAverage(vfVector* vArr, int count)
 {
@@ -373,6 +450,28 @@ static DWORD WINAPI vfMain(void* params)
 
 		/* update boundquad values */
 		updateBoundquadValues();
+
+		/* loop through all bounds and check for collisions */
+		for (int i = 0; i < _bBSize; i++)
+		{
+			_bqBuffer[i].collisions = 0;
+			//for (int j = 0; j < 4; j++)
+			//{
+			//	printf("bq values: %f %f\n", _bqBuffer[i].vectors[j].x,
+			//		_bqBuffer[i].vectors[j].y);
+			//}
+		}
+		for (int i = 0; i < _bBSize; i++)
+		{
+			if (!_bBufferField[i]) continue;
+			printf("bound active at: %d\n", i);
+			boundQuad* sQuad = _bqBuffer + i;
+			for (int j = 0; j < _bBSize; j++)
+			{
+				if (!_bBufferField[j] || i == j) continue;
+				collisionCheck(sQuad, _bqBuffer + j);
+			}
+		}
 
 		/* RELEASE BUFFER OWNERSHIP */
 		if (!ReleaseMutex(_mutex))

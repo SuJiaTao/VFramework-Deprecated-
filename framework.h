@@ -56,7 +56,6 @@
 #define TFORM(tHndl) vfGetTransform(tHndl)
 
 /* STRUCTURE DEFINITIONS */
-
 typedef unsigned int vfHandle;
 
 typedef struct vfVector
