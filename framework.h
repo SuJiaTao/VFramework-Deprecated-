@@ -39,11 +39,20 @@
 #define VF_BUFFER_SIZE_INIT 0x60
 #define VF_BUFFER_SIZE_INCREMENT 0x30
 #define VF_PARENT_SEARCH_THRESHOLD 0x20
+#define VF_COLLISIONS_MAX 0x20
+
+#define VF_MUTEX_DEADLOCK_INTERVAL 0xfff
+#define VF_MUTEX_RELEASE_SLEEP_TIME 0x1
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
+#define PHYS(b, d, m) vfCreatePhysics(b, d, m)
+#define ETRANSFORM(eHndl) vfGetTransform(vfGetEntity(eHndl)->transform)
 
 /* STRUCTURE DEFINITIONS */
+
+typedef unsigned int vfHandle;
+
 typedef struct vfVector
 {
 	float x;
@@ -64,27 +73,8 @@ typedef struct vfTransform
 	float rotation;
 	float scale;
 
-	struct vfTransform* parent;
+	vfHandle parent;
 } vfTransform;
-
-typedef struct vfBound
-{
-	int active;
-	vfTransform* body;
-	vfVector position;
-	vfVector dimensions;
-} vfBound;
-
-typedef struct vfParticle
-{
-	int active;
-	unsigned char layer;
-	vgShape shape;
-	vgTexture texture;
-	vfColor filter;
-
-	vfTransform* transform;
-} vfParticle;
 
 typedef struct vfPhysics
 {
@@ -98,6 +88,27 @@ typedef struct vfPhysics
 	float tourque;
 } vfPhysics;
 
+typedef struct vfBound
+{
+	int active;
+	vfHandle body;
+	vfVector position;
+	vfVector dimensions;
+
+	vfPhysics* physics;
+} vfBound;
+
+typedef struct vfParticle
+{
+	int active;
+	unsigned char layer;
+	vgShape shape;
+	vgTexture texture;
+	vfColor filter;
+
+	vfHandle transform;
+} vfParticle;
+
 typedef struct vfEntity
 {
 	int active;
@@ -106,12 +117,10 @@ typedef struct vfEntity
 	vgShape shape;
 	vfColor filter;
 
-	vfBound* bounds;
+	vfHandle bounds;
 	vfPhysics physics;
-	vfTransform* transform;
+	vfHandle transform;
 } vfEntity;
-
-typedef unsigned int vfHandle;
 
 /* MODULE INIT AND TERMINATE FUNCTIONS */
 VFAPI void vfInit(void);
@@ -123,25 +132,25 @@ VFAPI void vfThreadSleepTime(unsigned int miliseconds);
 /* STRUCT CREATION FUNCTIONS */
 VFAPI vfVector vfCreateVector(float x, float y);
 VFAPI vfColor vfCreateColor(int r, int g, int b, int a);
-VFAPI vfTransform* vfCreateTransformv(vfVector vector);
-VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
+VFAPI vfHandle vfCreateTransformv(vfVector vector);
+VFAPI vfHandle vfCreateTransforma(vfVector vector, float rotation,
 	float scale);
-VFAPI vfTransform* vfCreateTransformp(vfTransform* parent);
-VFAPI vfBound* vfCreateBoundt(vfTransform* body);
-VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
+VFAPI vfHandle vfCreateTransformp(vfHandle parent);
+VFAPI vfHandle vfCreateBoundt(vfHandle body);
+VFAPI vfHandle vfCreateBounda(vfHandle body, vfVector position,
 	vfVector dimensions);
-VFAPI vfParticle* vfCreateParticlet(vfTransform* transform);
-VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
+VFAPI vfHandle vfCreateParticlet(vfHandle transform);
+VFAPI vfHandle vfCreateParticlea(vfHandle transform, vgTexture texture,
 	vgShape shape, unsigned char layer);
 VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass);
-VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape, 
+VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 	vgTexture texture, vfPhysics physics, vfVector boundPosition, 
 	vfVector boundDimensions);
 
 /* STRUCT DESTRUCTION FUNCTIONS */
-VFAPI void vfDestroyTransform(vfTransform* transform);
-VFAPI void vfDestroyBound(vfBound* bound);
-VFAPI void vfDestroyParticle(vfParticle* particle);
+VFAPI void vfDestroyTransform(vfHandle transform);
+VFAPI void vfDestroyBound(vfHandle bound);
+VFAPI void vfDestroyParticle(vfHandle particle);
 
 /* STRUCT RELATED FUNCTIONS */
 VFAPI vfHandle vfGetTransformHandle(vfTransform* transform);
@@ -150,6 +159,7 @@ VFAPI vfHandle vfGetParticleHandle(vfParticle* particle);
 VFAPI vfTransform* vfGetTransform(vfHandle hndl);
 VFAPI vfBound* vfGetBound(vfHandle hndl);
 VFAPI vfParticle* vfGetParticle(vfHandle hndl);
+VFAPI vfEntity* vfGetEntity(vfHandle hndl);
 
 /* RENDERING FUNCTIONS */
 VFAPI void vfRenderParticles(void);
