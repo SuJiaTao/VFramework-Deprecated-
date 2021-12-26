@@ -41,6 +41,8 @@
 #define VF_PARENT_SEARCH_THRESHOLD 0x20
 #define VF_COLLISIONS_MAX 0x20
 
+#define VF_NOPARENT -1
+
 #define VF_MUTEX_DEADLOCK_INTERVAL 0xfff
 #define VF_MUTEX_RELEASE_SLEEP_TIME 0x1
 
@@ -48,6 +50,7 @@
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
 #define ETRANSFORM(eHndl) vfGetTransform(vfGetEntity(eHndl)->transform)
+#define TFORM(tHndl) vfGetTransform(tHndl)
 
 /* STRUCTURE DEFINITIONS */
 

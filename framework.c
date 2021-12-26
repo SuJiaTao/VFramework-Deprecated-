@@ -246,10 +246,10 @@ static void updateFinalTransforms(void)
 		/* except all it's values correspond to their global value */
 		/* based on their parent's values */
 		vfTransform tValue = _tBuffer[i];
-		vfTransform* tParent = tValue.parent;
+		vfHandle tParent = tValue.parent;
 		int pCounter = 0; /* parent counter */
 
-		while (tParent != NULL)
+		while (tParent != VF_NOPARENT)
 		{
 			/* makes sure not to get stuck in an infinte loop */
 			pCounter++;
@@ -270,8 +270,8 @@ static void updateFinalTransforms(void)
 
 			/* update scaling and angle */
 			const float degToRadians = 0.01745329f;
-			r *= tParent->scale;
-			theta += (tParent->rotation * degToRadians);
+			r *= TFORM(tParent)->scale;
+			theta += (TFORM(tParent)->rotation * degToRadians);
 
 			/* convert back to cartesian */
 			const float posX = r * cosf(theta);
@@ -284,13 +284,13 @@ static void updateFinalTransforms(void)
 			/* update all other members */
 
 			/* update visual scale */
-			tValue.position.x += tParent->position.x;
-			tValue.position.y += tParent->position.y;
-			tValue.scale *= tParent->scale;
-			tValue.rotation += tParent->rotation;
+			tValue.position.x += TFORM(tParent)->position.x;
+			tValue.position.y += TFORM(tParent)->position.y;
+			tValue.scale *= TFORM(tParent)->scale;
+			tValue.rotation += TFORM(tParent)->rotation;
 
 			/* search for NEXT parent */
-			tParent = tParent->parent;
+			tParent = TFORM(tParent)->parent;
 		}
 
 		/* set value */
@@ -504,6 +504,7 @@ VFAPI vfHandle vfCreateTransformv(vfVector vector)
 	/* set values */
 	vfTransform* rTransform = _tBuffer + tIndex;
 	rTransform->position = vector;
+	rTransform->parent = VF_NOPARENT;
 
 	return tIndex;
 }
@@ -521,6 +522,7 @@ VFAPI vfHandle vfCreateTransforma(vfVector vector, float rotation,
 	rTransform->position = vector;
 	rTransform->rotation = rotation;
 	rTransform->scale = scale;
+	rTransform->parent = VF_NOPARENT;
 
 	return tIndex;
 }
@@ -719,7 +721,7 @@ VFAPI void vfRenderParticles(void)
 		if (!render.active) continue;
 
 		/* get FINAL transform */
-		vfTransform* rTransform = render.transform;
+		vfTransform* rTransform = TFORM(render.transform);
 		int tIndex = rTransform - _tBuffer;
 		vfTransform tFinal = _tFinalBuffer[tIndex];
 
