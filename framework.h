@@ -43,13 +43,15 @@
 
 #define VF_NOPARENT UINT_MAX
 
-#define VF_MUTEX_DEADLOCK_INTERVAL 0xfff
-#define VF_MUTEX_RELEASE_SLEEP_TIME 0x1
+#define VF_MUTEX_DEADLOCK_INTERVAL 0x80
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
+#define ENT(eHndl) vfGetEntity(eHndl)
+#define PCLE(pHndl) vfGetParticle(pHndl)
 #define ETRANSFORM(eHndl) vfGetTransformEnt(eHndl)
+#define PTRANSFORM(pHndl) vfGetTransformEnt(vfGetParticle(pHndl)->transform)
 #define EPHYSICS(eHndl) vfGetEntity(eHndl)->physics
 #define TFORM(tHndl) vfGetTransform(tHndl)
 

@@ -124,19 +124,6 @@ static inline vfVector vertexAverage(vfVector* vArr, int count)
 static inline int findBufferSpot(void** buffer, int** field, int* size, 
 	size_t structSize)
 {
-	/* wait for REALLOC permission */
-	int waitResult = WaitForSingleObject(_mutex, 
-		VF_MUTEX_DEADLOCK_INTERVAL);
-	if (waitResult != WAIT_OBJECT_0)
-	{
-		wchar_t errBuff[255];
-		swprintf(errBuff, 255, L"Error Code: %d", GetLastError());
-		MessageBox(NULL, L"Thread deadlock in VFramework.dll",
-			L"FATAL ERROR", MB_OK);
-		MessageBox(NULL, errBuff, L"ERROR INFO", MB_OK);
-		exit(1);
-	}
-
 	/* check for NULL */
 	if (*buffer == NULL || *field == NULL) return -1;
 
@@ -146,21 +133,20 @@ static inline int findBufferSpot(void** buffer, int** field, int* size,
 	for (i = 0; i < bSize; i++)
 	{
 		/* empty spot */
-		if ((*field)[i] == 0) 
-		{
-			/* RELEASE MUTEX */
-			if (!ReleaseMutex(_mutex))
-			{
-				wchar_t errBuffer[255];
-				swprintf(errBuffer, 255, L"Mutex relase failed! Err code: %d",
-					GetLastError());
-				MessageBox(NULL, errBuffer, L"FATAL ERROR", MB_OK);
-				exit(1);
-			}
-			Sleep(VF_MUTEX_RELEASE_SLEEP_TIME);
+		if ((*field)[i] == 0) return i;
+	}
 
-			return i;
-		} 
+	/* wait for REALLOC permission */
+	int waitResult = WaitForSingleObject(_mutex,
+		VF_MUTEX_DEADLOCK_INTERVAL);
+	if (waitResult != WAIT_OBJECT_0)
+	{
+		wchar_t errBuff[255];
+		swprintf(errBuff, 255, L"Error Code: %d", GetLastError());
+		MessageBox(NULL, L"Thread deadlock in VFramework.dll",
+			L"FATAL ERROR", MB_OK);
+		MessageBox(NULL, errBuff, L"ERROR INFO", MB_OK);
+		exit(1);
 	}
 	
 	/* if loop exit, size too small */
@@ -222,7 +208,6 @@ static inline int findBufferSpot(void** buffer, int** field, int* size,
 		MessageBox(NULL, errBuffer, L"FATAL ERROR", MB_OK);
 		exit(1);
 	}
-	Sleep(VF_MUTEX_RELEASE_SLEEP_TIME);
 
 	/* update size and return */
 	*size = bSize;
@@ -398,7 +383,6 @@ static DWORD WINAPI vfMain(void* params)
 			MessageBox(NULL, errBuffer, L"FATAL ERROR", MB_OK);
 			exit(1);
 		}
-		Sleep(VF_MUTEX_RELEASE_SLEEP_TIME);
 	}
 }
 
