@@ -41,7 +41,7 @@
 #define VF_PARENT_SEARCH_THRESHOLD 0x20
 #define VF_COLLISIONS_MAX 0x20
 
-#define VF_NOPARENT -1
+#define VF_NOPARENT UINT_MAX
 
 #define VF_MUTEX_DEADLOCK_INTERVAL 0xfff
 #define VF_MUTEX_RELEASE_SLEEP_TIME 0x1
@@ -49,7 +49,8 @@
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
-#define ETRANSFORM(eHndl) vfGetTransform(vfGetEntity(eHndl)->transform)
+#define ETRANSFORM(eHndl) vfGetTransformEnt(eHndl)
+#define EPHYSICS(eHndl) vfGetEntity(eHndl)->physics
 #define TFORM(tHndl) vfGetTransform(tHndl)
 
 /* STRUCTURE DEFINITIONS */
@@ -160,6 +161,7 @@ VFAPI vfHandle vfGetTransformHandle(vfTransform* transform);
 VFAPI vfHandle vfGetBoundHandle(vfBound* bound);
 VFAPI vfHandle vfGetParticleHandle(vfParticle* particle);
 VFAPI vfTransform* vfGetTransform(vfHandle hndl);
+VFAPI vfTransform* vfGetTransformEnt(vfHandle hndl);
 VFAPI vfBound* vfGetBound(vfHandle hndl);
 VFAPI vfParticle* vfGetParticle(vfHandle hndl);
 VFAPI vfEntity* vfGetEntity(vfHandle hndl);

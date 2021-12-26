@@ -124,7 +124,6 @@ static inline vfVector vertexAverage(vfVector* vArr, int count)
 static inline int findBufferSpot(void** buffer, int** field, int* size, 
 	size_t structSize)
 {
-	puts("fbs func invoked");
 	/* wait for REALLOC permission */
 	int waitResult = WaitForSingleObject(_mutex, 
 		VF_MUTEX_DEADLOCK_INTERVAL);
@@ -163,8 +162,6 @@ static inline int findBufferSpot(void** buffer, int** field, int* size,
 			return i;
 		} 
 	}
-
-	puts("\tREALLOCING!");
 	
 	/* if loop exit, size too small */
 	void* temp;
@@ -382,7 +379,6 @@ static DWORD WINAPI vfMain(void* params)
 			MessageBox(NULL, errBuff, L"ERROR INFO", MB_OK);
 			exit(1);
 		}
-		puts("ran cycle");
 
 		/* update fTransform objects */
 		updateFinalTransforms();
@@ -690,6 +686,12 @@ VFAPI vfHandle vfGetParticleHandle(vfParticle* particle)
 VFAPI vfTransform* vfGetTransform(vfHandle hndl)
 {
 	return _tBuffer + hndl;
+}
+
+VFAPI vfTransform* vfGetTransformEnt(vfHandle hndl)
+{
+	vfEntity ent = _eBuffer[hndl];
+	return vfGetTransform(ent.transform);
 }
 
 VFAPI vfBound* vfGetBound(vfHandle hndl)
