@@ -514,8 +514,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	if (collisionCount == 8)
 	{
 		/* negative pushback vector */
-		target->collisionData[target->collisions++].x = -smallestPVect.x;
-		target->collisionData[target->collisions++].y = -smallestPVect.y;
+		target->collisionData[target->collisions++].x = -smallestPVect.x / 2.0f;
+		target->collisionData[target->collisions++].y = -smallestPVect.y / 2.0f;
 	}
 
 	return 1;
@@ -599,9 +599,12 @@ static DWORD WINAPI vfMain(void* params)
 			}
 
 			/* test for NaN */
-			if (isnan(pushBack.x) || isnan(pushBack.y))	continue;
-			TFORM(_bBuffer[i].body)->position.x += pushBack.x;
-			TFORM(_bBuffer[i].body)->position.y += pushBack.y;
+			if (!isnan(pushBack.x) && !isnan(pushBack.y))
+			{
+				TFORM(_bBuffer[i].body)->position.x += pushBack.x;
+				TFORM(_bBuffer[i].body)->position.y += pushBack.y;
+			}
+			
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
