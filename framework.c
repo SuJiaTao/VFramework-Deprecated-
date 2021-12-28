@@ -588,8 +588,20 @@ static DWORD WINAPI vfMain(void* params)
 		{
 			if (!_bBufferField[i]) continue;
 
-			TFORM(_bBuffer[i].body)->position.x += _bqBuffer[i].collisionAccumulator.x;
-			TFORM(_bBuffer[i].body)->position.y += _bqBuffer[i].collisionAccumulator.y;
+			vfVector pushBack = _bqBuffer[i].collisionAccumulator;
+			float pMag = vectorMagnitude(pushBack);
+			if (pMag > VF_PUSHBACK_MAGNITUDE_MAX)
+			{
+				pushBack.x /= pMag;
+				pushBack.y /= pMag;
+				pushBack.x *= VF_PUSHBACK_MAGNITUDE_MAX;
+				pushBack.y *= VF_PUSHBACK_MAGNITUDE_MAX;
+			}
+
+			/* test for NaN */
+			if (isnan(pushBack.x) || isnan(pushBack.y))	continue;
+			TFORM(_bBuffer[i].body)->position.x += pushBack.x;
+			TFORM(_bBuffer[i].body)->position.y += pushBack.y;
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */

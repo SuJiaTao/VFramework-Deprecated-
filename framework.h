@@ -40,10 +40,10 @@
 #define VF_BUFFER_SIZE_INCREMENT 0x30
 #define VF_PARENT_SEARCH_THRESHOLD 0x20
 #define VF_COLLISIONS_MAX 0x20
-
 #define VF_NOPARENT UINT_MAX
 #define VF_MUTEX_DEADLOCK_INTERVAL 0x80
 #define VF_MUTEX_RENDERBOUNDS_INTERVAL 0x10
+#define VF_PUSHBACK_MAGNITUDE_MAX 0x20
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
