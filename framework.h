@@ -54,6 +54,7 @@
 #define PTRANSFORM(pHndl) vfGetTransformEnt(vfGetParticle(pHndl)->transform)
 #define EPHYSICS(eHndl) vfGetEntity(eHndl)->physics
 #define TFORM(tHndl) vfGetTransform(tHndl)
+#define EBOUND(eHndl) vfGetBound(vfGetEntity(eHndl)->bounds)
 
 /* STRUCTURE DEFINITIONS */
 typedef unsigned int vfHandle;

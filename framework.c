@@ -379,6 +379,10 @@ static void updateBoundquadValues(void)
 /* ========== COLLISIONCHECK FUNCTION ========== */
 static inline int collisionCheck(boundQuad* source, boundQuad* target)
 {
+	/* check if max collisions reached */
+	if (source->collisions == 32) return 0;
+	if (target->collisions == 32) return 0;
+
 	/* grab the vector from target to source, this will be */
 	/* handy later */
 	vfVector avgVect = VECT(source->average.x - target->average.x,
