@@ -67,7 +67,7 @@ typedef struct projVect
 	vfVector p1;
 	vfVector p2;
 	vfVector vector;
-	float magnitude;
+	float mag;
 } projVect;
 
 /* boundquad buffer, this buffer maps ever Bound object to a quad, which */
@@ -98,7 +98,7 @@ static inline projVect createProjVect(vfVector p1, vfVector p2)
 	rVec.p1 = p1;
 	rVec.p2 = p2;
 	rVec.vector = VECT(p2.x - p1.x, p2.y - p1.y);
-	rVec.magnitude = sqrtf(powf(rVec.vector.x, 2) + powf(rVec.vector.y, 2));
+	rVec.mag = sqrtf(pow(rVec.vector.x, 2), pow(rVec.vector.y, 2));
 	return rVec;
 }
 
@@ -382,25 +382,31 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			target->verts[(i + 1) % 4]);
 	}
 
+	/* extra data of separation of bounds */
+	int smallestIndex = 0xffffffff;
+	float smallestGap = 0xffffffff;
+
 	/* FOR EVERY EDGE TO PROJECT */
 	int collisionCount = 0;
 	for (int i = 0; i < 8; i++) 
 	{
+		/* grab edge vec and normalize */
 		projVect edgeData = projBuff[i];
 		vfVector edgeVector = edgeData.vector;
-		edgeVector.x /= edgeData.magnitude; /* normalize */
-		edgeVector.y /= edgeData.magnitude;
+		edgeVector.x /= edgeData.mag;
+		edgeVector.y /= edgeData.mag;
 
 		/* FOR ALL SOURCE VERTS */
 		float sMin = 0xffffffff;
 		float sMax = 0xffffffff;
 		for (int j = 0; j < 4; j++) 
 		{
-			/* get vector to project */
+			/* get vector to project and normalize */
 			vfVector toProject = VECT(source->verts[j].x - edgeData.p1.x,
 				source->verts[j].y - edgeData.p1.y);
-			toProject.x /= edgeData.magnitude; /* normalize by edgeData mag */
-			toProject.y /= edgeData.magnitude;
+
+			toProject.x /= edgeData.mag;
+			toProject.y /= edgeData.mag;
 
 			/* get dot product */
 			float dProduct = vectorDotProduct(edgeVector, toProject);
@@ -423,11 +429,12 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		float tMax = 0xffffffff;
 		for (int j = 0; j < 4; j++)
 		{
-			/* get vector to project */
+			/* get vector to project and normalize */
 			vfVector toProject = VECT(target->verts[j].x - edgeData.p1.x,
 				target->verts[j].y - edgeData.p1.y);
-			toProject.x /= edgeData.magnitude; /* normalize by edgeData mag */
-			toProject.y /= edgeData.magnitude;
+
+			toProject.x /= edgeData.mag;
+			toProject.y /= edgeData.mag;
 
 			/* get dot product */
 			float dProduct = vectorDotProduct(edgeVector, toProject);
@@ -440,19 +447,54 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			}
 			else
 			{
-				tMin = min(sMin, dProduct);
-				tMax = max(sMax, dProduct);
+				tMin = min(tMin, dProduct);
+				tMax = max(tMax, dProduct);
 			}
 		} /* TARGET VERT LOOP END */
 
 		/* compare if source/target projections are overlapping */
-		if (max(sMax, tMax) - min(sMin, tMin) < (sMax - sMin) + (tMax - tMin))
+		if (max(sMax, tMax) - min(sMin, tMin) <= (sMax - sMin) + (tMax - tMin))
 		{
-			source->collisions++;
+			/* get gap value */
+			float gap = min(sMax, tMax) - max(sMin, tMin);
+
+			/* set get smallest gap value */
+			if (smallestIndex == 0xffffffff)
+			{
+				smallestIndex = i;
+				smallestGap = gap;
+			}
+			if ((smallestGap = min(gap, smallestGap)) == gap)
+			{
+				smallestIndex = i;
+			}
 			collisionCount++;
-		}
+		} /* MIN GAP END */
 
 	} /* EDGE LOOP END */
+
+	/* overlap thresold changes depending on angle */
+	int sourceIndex = source - _bqBuffer;
+	int targetIndex = target - _bqBuffer;
+	int colThresold = 8;
+	if (TFORM(_bBuffer[sourceIndex].body)->rotation == 0)
+		colThresold -= 1;
+	if (TFORM(_bBuffer[targetIndex].body)->rotation == 0)
+		colThresold -= 2;
+
+	/* IF OVERLAP */
+	if (collisionCount >= colThresold)
+	{
+		printf("collided\t");
+		/* get pushback vector and normalize */
+		vfVector pVect = VECT(projBuff[smallestIndex].vector.x,
+			projBuff[smallestIndex].vector.y);
+
+		source->collisionData[source->collisions].x = pVect.x * smallestGap;
+		source->collisionData[source->collisions].y = pVect.y * smallestGap;
+		source->collisions++;
+	}
+
 	return 1;
 }
 
@@ -888,9 +930,19 @@ VFAPI void vfRenderEntities(void)
 
 VFAPI void vfRenderBounds(void)
 {
-	int bCount = _bBSize;
+	/* wait for all bounds to be properly updated */
+	int wResult = WaitForSingleObject(_mutex, NULL);
+	if (wResult != WAIT_OBJECT_0) /* not finished updating */
+	{
+		return;
+	}
+	else
+	{
+		ReleaseMutex(_mutex); /* release captured mutex */
+	}
 
-	for (int i = 0; i < bCount; i++)
+	/* render bound */
+	for (int i = 0; i < _bBSize; i++)
 	{
 
 		if (!_bBufferField[i]) continue;
