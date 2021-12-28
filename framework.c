@@ -55,6 +55,7 @@ typedef struct boundQuad
 	unsigned short collisions;
 	vfVector collisionData[VF_COLLISIONS_MAX];
 	float collisionMass[VF_COLLISIONS_MAX];
+	vfVector collisionAccumulator;
 
 	vfVector verts[4];
 	vfVector average;
@@ -552,13 +553,9 @@ static DWORD WINAPI vfMain(void* params)
 		for (int i = 0; i < _bBSize; i++)
 		{
 			_bqBuffer[i].collisions = 0;
-			//for (int j = 0; j < 4; j++)
-			//{
-			//	printf("bq values: %f %f\n", _bqBuffer[i].vectors[j].x,
-			//		_bqBuffer[i].vectors[j].y);
-			//}
 		}
 		
+		/* GET COLLISION DATA */
 		for (int i = 0; i < _bBSize; i++)
 		{
 			if (!_bBufferField[i]) continue;
@@ -566,21 +563,29 @@ static DWORD WINAPI vfMain(void* params)
 			for (int j = 0; j < _bBSize; j++)
 			{
 				if (!_bBufferField[j] || j == i) continue;
-				int status = collisionCheck(_bqBuffer + i, _bqBuffer + j);
-
-				if (status)
-				{
-					for (int k = 0; k < _bqBuffer[i].collisions; k++)
-					{
-						if (_bBuffer[i].physics == NULL) break;
-						//_bBuffer[i].physics->velocity.x += _bqBuffer[i].collisionData[k].x;
-						//_bBuffer[i].physics->velocity.y += _bqBuffer[i].collisionData[k].y;
-					}
-				}
-				
-				
-
+				collisionCheck(_bqBuffer + i, _bqBuffer + j);
 			}
+		}
+
+		/* ACCUMULATE COLLISION DATA */
+		for (int i = 0; i < _bBSize; i++)
+		{
+			if (!_bBufferField[i]) continue;
+			_bqBuffer[i].collisionAccumulator = VECT(0, 0);
+			for (int k = 0; k < _bqBuffer[i].collisions; k++)
+			{
+				_bqBuffer[i].collisionAccumulator.x += _bqBuffer[i].collisionData[k].x;
+				_bqBuffer[i].collisionAccumulator.y += _bqBuffer[i].collisionData[k].y;
+			}
+		}
+
+		/* APPLY COLLISION DATA */
+		for (int i = 0; i < _bBSize; i++)
+		{
+			if (!_bBufferField[i]) continue;
+
+			TFORM(_bBuffer[i].body)->position.x += _bqBuffer[i].collisionAccumulator.x;
+			TFORM(_bBuffer[i].body)->position.y += _bqBuffer[i].collisionAccumulator.y;
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
