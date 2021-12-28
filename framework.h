@@ -17,6 +17,7 @@
 *		- Struct destruction functions
 *		- Struct related functions
 *		- Rendering functions
+*		- Physics functions
 * 
 ******************************************************************************/
 
@@ -172,5 +173,8 @@ VFAPI vfEntity* vfGetEntity(vfHandle hndl);
 VFAPI void vfRenderParticles(void);
 VFAPI void vfRenderEntities(void);
 VFAPI void vfRenderBounds(void);
+
+/* PHYSICS RELATED FUNCTIONS */
+VFAPI void vfSetPhysicsState(int value);
 
 #endif 

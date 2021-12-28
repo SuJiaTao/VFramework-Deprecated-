@@ -41,6 +41,7 @@ static HANDLE _fThread; /* thread handle */
 static HANDLE _heap; /* heap handle */
 static HANDLE _mutex; /* buffer use mutex */
 static unsigned int _sleepTime;
+static int _pEnabled; /* physics toggle */
 
 /* internal buffers */
 static vfTransform* _tBuffer; static int* _tBufferField; static int _tBSize;
@@ -249,7 +250,7 @@ static inline int findBufferSpot(void** buffer, int** field, int* size,
 }
 
 /* ========== FINAL TRANSFORM HANDLING FUNCTION ========== */
-static void updateFinalTransforms(void)
+static inline void updateFinalTransforms(void)
 {
 	/* ===== update FINAL transform objects ===== */
 	for (int i = 0; i < _tBSize; i++)
@@ -315,7 +316,7 @@ static void updateFinalTransforms(void)
 }
 
 /* ========= ENTITY VELOCITY DAMPENING FUNCTION ========== */
-static void updateEntityVelocities(void)
+static inline void updateEntityVelocities(void)
 {
 	for (int i = 0; i < _eBSize; i++)
 	{
@@ -340,7 +341,7 @@ static void updateEntityVelocities(void)
 }
 
 /* ========== BOUNDQUAD HANDLING FUNCTION ========== */
-static void updateBoundquadValues(void)
+static inline void updateBoundquadValues(void)
 {
 	for (int i = 0; i < _bBSize; i++)
 	{
@@ -521,6 +522,66 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	return 1;
 }
 
+/* ======== COLLISION HANDLING FUNCTION ======== */
+static inline void updateCollisions(void)
+{
+	/* loop through all bounds and check for collisions */
+	for (int i = 0; i < _bBSize; i++)
+	{
+		_bqBuffer[i].collisions = 0;
+	}
+
+	/* GET COLLISION DATA */
+	for (int i = 0; i < _bBSize; i++)
+	{
+		if (!_bBufferField[i]) continue;
+
+		for (int j = 0; j < _bBSize; j++)
+		{
+			if (!_bBufferField[j] || j == i) continue;
+			collisionCheck(_bqBuffer + i, _bqBuffer + j);
+		}
+	}
+
+	/* ACCUMULATE COLLISION DATA */
+	for (int i = 0; i < _bBSize; i++)
+	{
+		if (!_bBufferField[i]) continue;
+		_bqBuffer[i].collisionAccumulator = VECT(0, 0);
+		for (int k = 0; k < _bqBuffer[i].collisions; k++)
+		{
+			if (isnan(_bqBuffer[i].collisionData[k].x) ||
+				isnan(_bqBuffer[i].collisionData[k].y)) continue;
+			_bqBuffer[i].collisionAccumulator.x += _bqBuffer[i].collisionData[k].x;
+			_bqBuffer[i].collisionAccumulator.y += _bqBuffer[i].collisionData[k].y;
+		}
+	}
+
+	/* APPLY COLLISION DATA */
+	for (int i = 0; i < _bBSize; i++)
+	{
+		if (!_bBufferField[i]) continue;
+
+		vfVector pushBack = _bqBuffer[i].collisionAccumulator;
+		float pMag = vectorMagnitude(pushBack);
+		if (pMag > VF_PUSHBACK_MAGNITUDE_MAX)
+		{
+			pushBack.x /= pMag;
+			pushBack.y /= pMag;
+			pushBack.x *= VF_PUSHBACK_MAGNITUDE_MAX;
+			pushBack.y *= VF_PUSHBACK_MAGNITUDE_MAX;
+		}
+
+		/* test for NaN */
+		if (!isnan(pushBack.x) && !isnan(pushBack.y))
+		{
+			TFORM(_bBuffer[i].body)->position.x += pushBack.x;
+			TFORM(_bBuffer[i].body)->position.y += pushBack.y;
+		}
+
+	}
+}
+
 /* MODULE MAIN FUNCTION */
 static DWORD WINAPI vfMain(void* params)
 {
@@ -547,64 +608,16 @@ static DWORD WINAPI vfMain(void* params)
 		/* update fTransform objects */
 		updateFinalTransforms();
 
-		/* dampen entity velocities */
-		updateEntityVelocities();
-
 		/* update boundquad values */
 		updateBoundquadValues();
 
-		/* loop through all bounds and check for collisions */
-		for (int i = 0; i < _bBSize; i++)
+		if (_pEnabled)
 		{
-			_bqBuffer[i].collisions = 0;
-		}
-		
-		/* GET COLLISION DATA */
-		for (int i = 0; i < _bBSize; i++)
-		{
-			if (!_bBufferField[i]) continue;
+			/* dampen entity velocities */
+			updateEntityVelocities();
 
-			for (int j = 0; j < _bBSize; j++)
-			{
-				if (!_bBufferField[j] || j == i) continue;
-				collisionCheck(_bqBuffer + i, _bqBuffer + j);
-			}
-		}
-
-		/* ACCUMULATE COLLISION DATA */
-		for (int i = 0; i < _bBSize; i++)
-		{
-			if (!_bBufferField[i]) continue;
-			_bqBuffer[i].collisionAccumulator = VECT(0, 0);
-			for (int k = 0; k < _bqBuffer[i].collisions; k++)
-			{
-				_bqBuffer[i].collisionAccumulator.x += _bqBuffer[i].collisionData[k].x;
-				_bqBuffer[i].collisionAccumulator.y += _bqBuffer[i].collisionData[k].y;
-			}
-		}
-
-		/* APPLY COLLISION DATA */
-		for (int i = 0; i < _bBSize; i++)
-		{
-			if (!_bBufferField[i]) continue;
-
-			vfVector pushBack = _bqBuffer[i].collisionAccumulator;
-			float pMag = vectorMagnitude(pushBack);
-			if (pMag > VF_PUSHBACK_MAGNITUDE_MAX)
-			{
-				pushBack.x /= pMag;
-				pushBack.y /= pMag;
-				pushBack.x *= VF_PUSHBACK_MAGNITUDE_MAX;
-				pushBack.y *= VF_PUSHBACK_MAGNITUDE_MAX;
-			}
-
-			/* test for NaN */
-			if (!isnan(pushBack.x) && !isnan(pushBack.y))
-			{
-				TFORM(_bBuffer[i].body)->position.x += pushBack.x;
-				TFORM(_bBuffer[i].body)->position.y += pushBack.y;
-			}
-			
+			/* handle all collisions */
+			updateCollisions();
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
@@ -627,6 +640,7 @@ VFAPI void vfInit(void)
 
 	/* init module internal data */
 	_sleepTime = 0;
+	_pEnabled = 0;
 
 	/* init mutex */
 	_mutex = CreateMutex(NULL, FALSE, NULL);
@@ -1034,4 +1048,10 @@ VFAPI void vfRenderBounds(void)
 		
 		vgRenderLayer(0);
 	}
+}
+
+/* PHYSICS RELATED FUNCTIONS */
+VFAPI void vfSetPhysicsState(int value)
+{
+	_pEnabled = value;
 }
