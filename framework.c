@@ -98,7 +98,7 @@ static inline projVect createProjVect(vfVector p1, vfVector p2)
 	rVec.p1 = p1;
 	rVec.p2 = p2;
 	rVec.vector = VECT(p2.x - p1.x, p2.y - p1.y);
-	rVec.mag = sqrtf(pow(rVec.vector.x, 2) + pow(rVec.vector.y, 2));
+	rVec.mag = sqrtf(powf(rVec.vector.x, 2) + powf(rVec.vector.y, 2));
 	return rVec;
 }
 
@@ -128,6 +128,12 @@ static inline vfVector vertRotateScale(vfVector vertex, float angle,
 static inline float vectorDotProduct(vfVector v1, vfVector v2)
 {
 	return (v1.x * v2.x) + (v1.y * v2.y);
+}
+
+/* VECTOR MAGNITUDE FUNCTION */
+static inline float vectorMagnitude(vfVector vec)
+{
+	return sqrtf(powf(vec.x, 2) + powf(vec.y, 2));
 }
 
 /* VERTEX AVERAGING FUNCTIONS */
@@ -374,8 +380,12 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 {
 	/* grab the vector from target to source, this will be */
 	/* handy later */
-	vfVector avgVect = VECT(target->average.x - source->average.x,
-		target->average.y - source->average.y);
+	vfVector avgVect = VECT(source->average.x - target->average.x,
+		source->average.y - target->average.y);
+
+	/* variable to keep track of smallest pushback vector */
+	float smallestMag = -1;
+	vfVector smallestPVect;
 
 	/* firstly, get all edges to project vertexes onto */
 	projVect projBuff[8];
@@ -456,28 +466,38 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		/* compare if source/target projections are overlapping */
 		if (max(sMax, tMax) - min(sMin, tMin) <= (sMax - sMin) + (tMax - tMin))
 		{
+			collisionCount++;
+
 			/* get gap value */
 			float gap = min(sMax, tMax) - max(sMin, tMin);
 
-			printf("gap was: %f\n", gap);
+			/* grab pushback vector */
+			vfVector pVect = edgeData.vector;
+			pVect.x *= gap;
+			pVect.y *= gap;
+			float pVectMag = vectorMagnitude(pVect); /* get magnitude */
 
-			if (i > 3)
+			/* make sure vector is relevant */
+			if (vectorDotProduct(pVect, avgVect) >= 0)
 			{
-				/* grab pushback vector */
-				vfVector pVect = edgeData.vector;
-				pVect.x *= gap;
-				pVect.y *= gap;
-
-				if (vectorDotProduct(pVect, avgVect) >= 0)
+				/* discard if not the smallest possible vector */
+				if (smallestMag == -1)
 				{
-					collisionCount++;
-					printf("pvec was: %f %f\n", pVect.x, pVect.y);
-					target->collisionData[target->collisions] = pVect;
-					target->collisions++;
+					smallestMag = pVectMag;
+					smallestPVect = pVect;
 				}
-			}
-			
-		}
+				else
+				{
+					if ((min(smallestMag, pVectMag)) == pVectMag)
+					{
+						smallestMag = pVectMag;
+						smallestPVect = pVect;
+					}
+				}
+
+			} /* END VECTOR CHECK */
+
+		} /* END OVERLAP CHECK */
 		else
 		{
 			return 0;
@@ -488,7 +508,9 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* IF OVERLAP */
 	if (collisionCount == 8)
 	{
-		printf("collided\t");
+		/* negative pushback vector */
+		target->collisionData[target->collisions++].x = -smallestPVect.x;
+		target->collisionData[target->collisions++].y = -smallestPVect.y;
 	}
 
 	return 1;
@@ -550,8 +572,9 @@ static DWORD WINAPI vfMain(void* params)
 				{
 					for (int k = 0; k < _bqBuffer[i].collisions; k++)
 					{
-						//TFORM(_bBuffer[i].body)->position.x += _bqBuffer[i].collisionData[k].x;
-						//TFORM(_bBuffer[i].body)->position.y += _bqBuffer[i].collisionData[k].y;
+						if (_bBuffer[i].physics == NULL) break;
+						//_bBuffer[i].physics->velocity.x += _bqBuffer[i].collisionData[k].x;
+						//_bBuffer[i].physics->velocity.y += _bqBuffer[i].collisionData[k].y;
 					}
 				}
 				
@@ -940,7 +963,7 @@ VFAPI void vfRenderEntities(void)
 VFAPI void vfRenderBounds(void)
 {
 	/* wait for all bounds to be properly updated */
-	int wResult = WaitForSingleObject(_mutex, NULL);
+	int wResult = WaitForSingleObject(_mutex, VF_MUTEX_RENDERBOUNDS_INTERVAL);
 	if (wResult != WAIT_OBJECT_0) /* not finished updating */
 	{
 		return;
