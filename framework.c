@@ -98,7 +98,7 @@ static inline projVect createProjVect(vfVector p1, vfVector p2)
 	rVec.p1 = p1;
 	rVec.p2 = p2;
 	rVec.vector = VECT(p2.x - p1.x, p2.y - p1.y);
-	rVec.mag = sqrtf(pow(rVec.vector.x, 2), pow(rVec.vector.y, 2));
+	rVec.mag = sqrtf(pow(rVec.vector.x, 2) + pow(rVec.vector.y, 2));
 	return rVec;
 }
 
@@ -382,10 +382,6 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			target->verts[(i + 1) % 4]);
 	}
 
-	/* extra data of separation of bounds */
-	int smallestIndex = 0xffffffff;
-	float smallestGap = 0xffffffff;
-
 	/* FOR EVERY EDGE TO PROJECT */
 	int collisionCount = 0;
 	for (int i = 0; i < 8; i++) 
@@ -397,8 +393,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		edgeVector.y /= edgeData.mag;
 
 		/* FOR ALL SOURCE VERTS */
-		float sMin = 0xffffffff;
-		float sMax = 0xffffffff;
+		float sMin;
+		float sMax;
 		for (int j = 0; j < 4; j++) 
 		{
 			/* get vector to project and normalize */
@@ -412,7 +408,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			float dProduct = vectorDotProduct(edgeVector, toProject);
 
 			/* set new min/max */
-			if (sMin == 0xffffffff && sMax == 0xffffffff)
+			if (j == 0)
 			{
 				sMin = dProduct;
 				sMax = dProduct;
@@ -425,8 +421,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		} /* SOURCE VERT LOOP END */
 
 		/* FOR ALL TARGET VERTS */
-		float tMin = 0xffffffff;
-		float tMax = 0xffffffff;
+		float tMin;
+		float tMax;
 		for (int j = 0; j < 4; j++)
 		{
 			/* get vector to project and normalize */
@@ -440,7 +436,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			float dProduct = vectorDotProduct(edgeVector, toProject);
 
 			/* set new min/max */
-			if (tMin == 0xffffffff && tMax == 0xffffffff)
+			if (j == 0)
 			{
 				tMin = dProduct;
 				tMax = dProduct;
@@ -458,16 +454,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			/* get gap value */
 			float gap = min(sMax, tMax) - max(sMin, tMin);
 
-			/* set get smallest gap value */
-			if (smallestIndex == 0xffffffff)
-			{
-				smallestIndex = i;
-				smallestGap = gap;
-			}
-			if ((smallestGap = min(gap, smallestGap)) == gap)
-			{
-				smallestIndex = i;
-			}
+			printf("gap was: %f\n", gap);
 			collisionCount++;
 		} /* MIN GAP END */
 
@@ -477,22 +464,11 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	int sourceIndex = source - _bqBuffer;
 	int targetIndex = target - _bqBuffer;
 	int colThresold = 8;
-	if (TFORM(_bBuffer[sourceIndex].body)->rotation == 0)
-		colThresold -= 1;
-	if (TFORM(_bBuffer[targetIndex].body)->rotation == 0)
-		colThresold -= 2;
 
 	/* IF OVERLAP */
 	if (collisionCount >= colThresold)
 	{
 		printf("collided\t");
-		/* get pushback vector and normalize */
-		vfVector pVect = VECT(projBuff[smallestIndex].vector.x,
-			projBuff[smallestIndex].vector.y);
-
-		source->collisionData[source->collisions].x = pVect.x * smallestGap;
-		source->collisionData[source->collisions].y = pVect.y * smallestGap;
-		source->collisions++;
 	}
 
 	return 1;
@@ -540,16 +516,7 @@ static DWORD WINAPI vfMain(void* params)
 			//		_bqBuffer[i].vectors[j].y);
 			//}
 		}
-		for (int i = 0; i < _bBSize; i++)
-		{
-			if (!_bBufferField[i]) continue;
-			boundQuad* sQuad = _bqBuffer + i;
-			for (int j = 0; j < _bBSize; j++)
-			{
-				if (!_bBufferField[j] || i == j) continue;
-				collisionCheck(sQuad, _bqBuffer + j);
-			}
-		}
+		collisionCheck(_bqBuffer + 0, _bqBuffer + 1);
 
 		/* RELEASE BUFFER OWNERSHIP */
 		if (!ReleaseMutex(_mutex))
