@@ -372,6 +372,11 @@ static void updateBoundquadValues(void)
 /* ========== COLLISIONCHECK FUNCTION ========== */
 static inline int collisionCheck(boundQuad* source, boundQuad* target)
 {
+	/* grab the vector from target to source, this will be */
+	/* handy later */
+	vfVector avgVect = VECT(target->average.x - source->average.x,
+		target->average.y - source->average.y);
+
 	/* firstly, get all edges to project vertexes onto */
 	projVect projBuff[8];
 	for (int i = 0; i < 4; i++)
@@ -455,18 +460,33 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			float gap = min(sMax, tMax) - max(sMin, tMin);
 
 			printf("gap was: %f\n", gap);
-			collisionCount++;
-		} /* MIN GAP END */
+
+			if (i > 3)
+			{
+				/* grab pushback vector */
+				vfVector pVect = edgeData.vector;
+				pVect.x *= gap;
+				pVect.y *= gap;
+
+				if (vectorDotProduct(pVect, avgVect) >= 0)
+				{
+					collisionCount++;
+					printf("pvec was: %f %f\n", pVect.x, pVect.y);
+					target->collisionData[target->collisions] = pVect;
+					target->collisions++;
+				}
+			}
+			
+		}
+		else
+		{
+			return 0;
+		}
 
 	} /* EDGE LOOP END */
 
-	/* overlap thresold changes depending on angle */
-	int sourceIndex = source - _bqBuffer;
-	int targetIndex = target - _bqBuffer;
-	int colThresold = 8;
-
 	/* IF OVERLAP */
-	if (collisionCount >= colThresold)
+	if (collisionCount == 8)
 	{
 		printf("collided\t");
 	}
@@ -516,7 +536,29 @@ static DWORD WINAPI vfMain(void* params)
 			//		_bqBuffer[i].vectors[j].y);
 			//}
 		}
-		collisionCheck(_bqBuffer + 0, _bqBuffer + 1);
+		
+		for (int i = 0; i < _bBSize; i++)
+		{
+			if (!_bBufferField[i]) continue;
+
+			for (int j = 0; j < _bBSize; j++)
+			{
+				if (!_bBufferField[j] || j == i) continue;
+				int status = collisionCheck(_bqBuffer + i, _bqBuffer + j);
+
+				if (status)
+				{
+					for (int k = 0; k < _bqBuffer[i].collisions; k++)
+					{
+						//TFORM(_bBuffer[i].body)->position.x += _bqBuffer[i].collisionData[k].x;
+						//TFORM(_bBuffer[i].body)->position.y += _bqBuffer[i].collisionData[k].y;
+					}
+				}
+				
+				
+
+			}
+		}
 
 		/* RELEASE BUFFER OWNERSHIP */
 		if (!ReleaseMutex(_mutex))
