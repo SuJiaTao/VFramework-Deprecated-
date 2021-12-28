@@ -49,16 +49,26 @@ static vfParticle* _pBuffer; static int* _pBufferField; static int _pBSize;
 static vfBound* _bBuffer; static int* _bBufferField; static int _bBSize;
 static vfEntity* _eBuffer; static int* _eBufferField; static int _eBSize;
 
+/* boundQuad struct definition */
 typedef struct boundQuad
 {
 	unsigned short collisions;
 	vfVector collisionData[VF_COLLISIONS_MAX];
 	float collisionMass[VF_COLLISIONS_MAX];
 
-	vfVector vectors[4];
+	vfVector verts[4];
 	vfVector average;
 
 } boundQuad;
+
+/* projVect struct definition */
+typedef struct projVect 
+{
+	vfVector p1;
+	vfVector p2;
+	vfVector vector;
+	float magnitude;
+} projVect;
 
 /* boundquad buffer, this buffer maps ever Bound object to a quad, which */
 /* is the Bound object's dimensions and offset translated by it's transform */
@@ -73,12 +83,23 @@ static inline boundQuad createBoundQuad(vfVector bL, vfVector tL, vfVector tR,
 {
 	boundQuad bQ;
 	bQ.collisions = 0;
-	bQ.vectors[BL] = bL;
-	bQ.vectors[TL] = tL;
-	bQ.vectors[TR] = tR;
-	bQ.vectors[BR] = bR;
+	bQ.verts[BL] = bL;
+	bQ.verts[TL] = tL;
+	bQ.verts[TR] = tR;
+	bQ.verts[BR] = bR;
 	bQ.average = VECT(0, 0);
 	return bQ;
+}
+
+/* INTERNAL PROJVECT CREATION FUNCTION */
+static inline projVect createProjVect(vfVector p1, vfVector p2) 
+{
+	projVect rVec;
+	rVec.p1 = p1;
+	rVec.p2 = p2;
+	rVec.vector = VECT(p2.x - p1.x, p2.y - p1.y);
+	rVec.magnitude = sqrtf(powf(rVec.vector.x, 2) + powf(rVec.vector.y, 2));
+	return rVec;
 }
 
 /* VERTEX ROTATION FUNCTION */
@@ -103,81 +124,10 @@ static inline vfVector vertRotateScale(vfVector vertex, float angle,
 	return vfCreateVector(posX, posY);
 }
 
-/* COLLISIONCHECK FUNCTION */
-static inline int collisionCheck(boundQuad* source, boundQuad* target)
+/* VECTOR DOT PRODUCT FUNCTION */
+static inline float vectorDotProduct(vfVector v1, vfVector v2)
 {
-	int overlapCount = 0;
-
-	/* for every line on the source quad */
-	for (int i = 0; i < 4; i++)
-	{
-		/* grab an edge */
-		vfVector p1 = source->vectors[i];
-		vfVector p2 = source->vectors[(i + 1) % 4];
-
-		/* get it's axis */
-		vfVector axis = VECT(p2.x - p1.x, p2.y - p1.y);
-
-		/* get angle */
-		const float axisAngle = atan2(axis.y, axis.x);
-
-		/* grab bounds */
-		boundQuad tformSource = *source;
-		boundQuad tformTarget = *target;
-		for (int j = 0; j < 4; j++)
-		{
-			/* rotate so that "axis" is origin */
-			tformSource.vectors[j] = vertRotateScale(tformSource.vectors[j],
-				axisAngle, 1);
-			tformTarget.vectors[j] = vertRotateScale(tformTarget.vectors[j],
-				axisAngle, 1);
-		}
-
-		/* get min and max of each set of vertexes */
-		float sMin = min(min(tformSource.vectors[0].y, tformSource.vectors[1].y),
-			min(tformSource.vectors[2].y, tformSource.vectors[3].y));
-		float sMax = max(max(tformSource.vectors[0].y, tformSource.vectors[1].y),
-			max(tformSource.vectors[2].y, tformSource.vectors[3].y));
-		float tMin = min(min(tformTarget.vectors[0].y, tformTarget.vectors[1].y),
-			min(tformTarget.vectors[2].y, tformTarget.vectors[3].y));
-		float tMax = max(max(tformTarget.vectors[0].y, tformTarget.vectors[1].y),
-			max(tformTarget.vectors[2].y, tformTarget.vectors[3].y));
-
-		/* check for overlap */
-		if (max(sMax, tMax) - min(sMin, tMin) > (sMax - sMin) + (tMax - tMin))
-		{
-			puts("FOUND OVERLAP!");
-			source->collisions++;
-			target->collisions++;
-			overlapCount++;
-		}
-
-		sMin = min(min(tformSource.vectors[0].x, tformSource.vectors[1].x),
-			min(tformSource.vectors[2].x, tformSource.vectors[3].x));
-		sMax = max(max(tformSource.vectors[0].x, tformSource.vectors[1].x),
-			max(tformSource.vectors[2].x, tformSource.vectors[3].x));
-		tMin = min(min(tformTarget.vectors[0].x, tformTarget.vectors[1].x),
-			min(tformTarget.vectors[2].x, tformTarget.vectors[3].x));
-		tMax = max(max(tformTarget.vectors[0].x, tformTarget.vectors[1].x),
-			max(tformTarget.vectors[2].x, tformTarget.vectors[3].x));
-
-		/* check for overlap */
-		if (max(sMax, tMax) - min(sMin, tMin) > (sMax - sMin) + (tMax - tMin))
-		{
-			puts("FOUND OVERLAP!");
-			source->collisions++;
-			target->collisions++;
-			overlapCount++;
-		}
-	}
-
-	if (overlapCount == 3)
-	{
-		source->collisions++;
-		target->collisions++;
-		return 1;
-	}
-	return 0;
+	return (v1.x * v2.x) + (v1.y * v2.y);
 }
 
 /* VERTEX AVERAGING FUNCTIONS */
@@ -405,18 +355,105 @@ static void updateBoundquadValues(void)
 		/* offset bQuad by transform and rotate by angle */
 		for (int j = 0; j < 4; j++)
 		{
-			bQuad.vectors[j] = vertRotateScale(bQuad.vectors[j], tFinal.rotation,
+			bQuad.verts[j] = vertRotateScale(bQuad.verts[j], tFinal.rotation,
 				tFinal.scale);
-			bQuad.vectors[j].x += tFinal.position.x;
-			bQuad.vectors[j].y += tFinal.position.y;
+			bQuad.verts[j].x += tFinal.position.x;
+			bQuad.verts[j].y += tFinal.position.y;
 		}
 
 		/* calculate average */
-		bQuad.average = vertexAverage(bQuad.vectors, 4);
+		bQuad.average = vertexAverage(bQuad.verts, 4);
 
 		/* assign bQuad to respective buffer index */
 		_bqBuffer[i] = bQuad;
 	}
+}
+
+/* ========== COLLISIONCHECK FUNCTION ========== */
+static inline int collisionCheck(boundQuad* source, boundQuad* target)
+{
+	/* firstly, get all edges to project vertexes onto */
+	projVect projBuff[8];
+	for (int i = 0; i < 4; i++)
+	{
+		projBuff[i] = createProjVect(source->verts[i],
+			source->verts[(i + 1) % 4]);
+		projBuff[i + 4] = createProjVect(target->verts[i],
+			target->verts[(i + 1) % 4]);
+	}
+
+	/* FOR EVERY EDGE TO PROJECT */
+	int collisionCount = 0;
+	for (int i = 0; i < 8; i++) 
+	{
+		projVect edgeData = projBuff[i];
+		vfVector edgeVector = edgeData.vector;
+		edgeVector.x /= edgeData.magnitude; /* normalize */
+		edgeVector.y /= edgeData.magnitude;
+
+		/* FOR ALL SOURCE VERTS */
+		float sMin = 0xffffffff;
+		float sMax = 0xffffffff;
+		for (int j = 0; j < 4; j++) 
+		{
+			/* get vector to project */
+			vfVector toProject = VECT(source->verts[j].x - edgeData.p1.x,
+				source->verts[j].y - edgeData.p1.y);
+			toProject.x /= edgeData.magnitude; /* normalize by edgeData mag */
+			toProject.y /= edgeData.magnitude;
+
+			/* get dot product */
+			float dProduct = vectorDotProduct(edgeVector, toProject);
+
+			/* set new min/max */
+			if (sMin == 0xffffffff && sMax == 0xffffffff)
+			{
+				sMin = dProduct;
+				sMax = dProduct;
+			}
+			else
+			{
+				sMin = min(sMin, dProduct);
+				sMax = max(sMax, dProduct);
+			}
+		} /* SOURCE VERT LOOP END */
+
+		/* FOR ALL TARGET VERTS */
+		float tMin = 0xffffffff;
+		float tMax = 0xffffffff;
+		for (int j = 0; j < 4; j++)
+		{
+			/* get vector to project */
+			vfVector toProject = VECT(target->verts[j].x - edgeData.p1.x,
+				target->verts[j].y - edgeData.p1.y);
+			toProject.x /= edgeData.magnitude; /* normalize by edgeData mag */
+			toProject.y /= edgeData.magnitude;
+
+			/* get dot product */
+			float dProduct = vectorDotProduct(edgeVector, toProject);
+
+			/* set new min/max */
+			if (tMin == 0xffffffff && tMax == 0xffffffff)
+			{
+				tMin = dProduct;
+				tMax = dProduct;
+			}
+			else
+			{
+				tMin = min(sMin, dProduct);
+				tMax = max(sMax, dProduct);
+			}
+		} /* TARGET VERT LOOP END */
+
+		/* compare if source/target projections are overlapping */
+		if (max(sMax, tMax) - min(sMin, tMin) < (sMax - sMin) + (tMax - tMin))
+		{
+			source->collisions++;
+			collisionCount++;
+		}
+
+	} /* EDGE LOOP END */
+	return 1;
 }
 
 /* MODULE MAIN FUNCTION */
@@ -464,7 +501,6 @@ static DWORD WINAPI vfMain(void* params)
 		for (int i = 0; i < _bBSize; i++)
 		{
 			if (!_bBufferField[i]) continue;
-			printf("bound active at: %d\n", i);
 			boundQuad* sQuad = _bqBuffer + i;
 			for (int j = 0; j < _bBSize; j++)
 			{
@@ -876,8 +912,8 @@ VFAPI void vfRenderBounds(void)
 		for (int j = 0; j < 4; j++)
 		{
 			int iNext = (j + 1) % 4;
-			vgLinef(bQ.vectors[j].x, bQ.vectors[j].y, bQ.vectors[iNext].x,
-				bQ.vectors[iNext].y);
+			vgLinef(bQ.verts[j].x, bQ.verts[j].y, bQ.verts[iNext].x,
+				bQ.verts[iNext].y);
 		}
 
 		vgColor3(255, 0, 64);
