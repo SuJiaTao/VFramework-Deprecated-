@@ -35,6 +35,8 @@
 #define TR 2
 #define BR 3
 
+typedef unsigned char field;
+
 /*========== INTERNAL RESOURCES ==========*/
 
 static HANDLE _fThread; /* thread handle */
@@ -44,11 +46,11 @@ static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 
 /* internal buffers */
-static vfTransform* _tBuffer; static int* _tBufferField; static int _tBSize;
+static vfTransform* _tBuffer; static field* _tBufferField; static int _tBSize;
 static vfTransform* _tFinalBuffer;
-static vfParticle* _pBuffer; static int* _pBufferField; static int _pBSize;
-static vfBound* _bBuffer; static int* _bBufferField; static int _bBSize;
-static vfEntity* _eBuffer; static int* _eBufferField; static int _eBSize;
+static vfParticle* _pBuffer; static field* _pBufferField; static int _pBSize;
+static vfBound* _bBuffer; static field* _bBufferField; static int _bBSize;
+static vfEntity* _eBuffer; static field* _eBufferField; static int _eBSize;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -56,6 +58,8 @@ typedef struct boundQuad
 	unsigned short collisions;
 	vfVector collisionData[VF_COLLISIONS_MAX];
 	vfPhysics collisionPhysics[VF_COLLISIONS_MAX];
+	vfVector collisionEdge[VF_COLLISIONS_MAX];
+	vfVector collisionTargetAverage[VF_COLLISIONS_MAX];
 	vfVector collisionAccumulator;
 
 	vfVector verts[4];
@@ -158,7 +162,7 @@ static inline vfVector vertexAverage(vfVector* vArr, int count)
 }
 
 /* INTERNAL BUFFER SEARCHING FUNCTION */
-static inline int findBufferSpot(void** buffer, int** field, int* size, 
+static inline int findBufferSpot(void** buffer, field** field, int* size, 
 	size_t structSize)
 {
 	/* check for NULL */
@@ -228,7 +232,7 @@ static inline int findBufferSpot(void** buffer, int** field, int* size,
 
 	/* realloc buffer field */
 	temp = HeapReAlloc(_heap, HEAP_ZERO_MEMORY,
-		*field, bSize * sizeof(int));
+		*field, bSize * sizeof(field));
 	if (temp == NULL)
 	{
 		MessageBox(NULL, L"MEMORY FAILURE", L"FATAL ERROR", MB_OK);
@@ -403,6 +407,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* variable to keep track of smallest pushback vector */
 	float smallestMag = -1;
 	vfVector smallestPVect = VECT(0, 0);
+	vfVector smallestEdgeVect = VECT(0, 0);
 
 	/* firstly, get all edges to project vertexes onto */
 	projVect projBuff[8];
@@ -502,6 +507,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 				{
 					smallestMag = pVectMag;
 					smallestPVect = pVect;
+					smallestEdgeVect = edgeVector;
 				}
 				else
 				{
@@ -509,6 +515,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 					{
 						smallestMag = pVectMag;
 						smallestPVect = pVect;
+						smallestEdgeVect = edgeVector;
 					}
 				}
 
@@ -544,6 +551,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		/* negative pushback vector */
 		target->collisionData[target->collisions].x = -(smallestPVect.x * massPercent);
 		target->collisionData[target->collisions].y = -(smallestPVect.y * massPercent);
+		target->collisionEdge[target->collisions] = smallestEdgeVect;
+		target->collisionTargetAverage[target->collisions] = source->average;
 		target->collisions++;
 	}
 
@@ -603,13 +612,80 @@ static inline void updateCollisions(void)
 	} /* COLLISION APPLICATION LOOP END */
 }
 
-/* ========== PHYSICS PUSHBACK HANDLER ========== */
-static inline void updatePhysicsPushback(void)
+/* ========== ENERGY TRANSFER SIMULATION FUNCTION ========== */
+static inline void updateCollisionVelocities(void)
 {
-	/* loop through */
+	/* loop through all objects with collisions */
+	for (int i = 0; i < _bBSize; i++)
+	{
+		if (!_bBufferField[i]) continue; /* check active */
+		if (!_bqBuffer[i].collisions) continue; /* check collided */
+
+		/* loop through all collision data */
+		for (int j = 0; j < _bqBuffer[i].collisions; j++)
+		{
+			/* get physics and quad data */
+			boundQuad* currentQuad = _bqBuffer + i;
+			vfPhysics* currentPhysics = currentQuad->staticData.physics;
+			vfPhysics targetPhysics = currentQuad->collisionPhysics[i];
+
+			/* get mass ratio */
+			float massTotal = currentPhysics->mass + targetPhysics.mass;
+			float currentRatio = currentPhysics->mass / massTotal;
+			float targetRatio = targetPhysics.mass / massTotal;
+
+			/* weighted average the velocities accordingly */
+			vfVector velCurrent = currentPhysics->velocity;
+			vfVector velTarget = targetPhysics.velocity;
+			float weightedVX = (velCurrent.x * currentRatio) + 
+				(velTarget.x * targetRatio);
+			float weightedVY = (velCurrent.y * currentRatio) +
+				(velTarget.y * targetRatio);
+			currentPhysics->velocity = VECT(weightedVX, weightedVY);
+
+			/* === BOUNCE === */
+			/* only bounce if current velocity is headed towards target */
+			vfVector targetAverage = _bqBuffer[i].collisionTargetAverage[j];
+			vfVector offsetVec = VECT(targetAverage.x - currentQuad->average.x,
+				targetAverage.y - currentQuad->average.y);
+			if (vectorDotProduct(currentPhysics->velocity, offsetVec) > 0)
+			{
+				/* account for bounce */
+				/* grab current velocity and reflect it based on collision edge */
+				vfVector toReflect = currentPhysics->velocity;
+				toReflect.x *= currentPhysics->bounciness;
+				toReflect.y *= currentPhysics->bounciness;
+
+				/* get collision edge and normalize */
+				vfVector collisionEdge = currentQuad->collisionEdge[j];
+				float cEdgeMag = vectorMagnitude(collisionEdge);
+				collisionEdge.x /= cEdgeMag;
+				collisionEdge.y /= cEdgeMag;
+
+				/* reflect current vector */
+				float dProd = 2.0f * vectorDotProduct(toReflect, collisionEdge);
+				collisionEdge.x *= dProd;
+				collisionEdge.y *= dProd;
+				toReflect.x -= collisionEdge.x;
+				toReflect.y -= collisionEdge.y;
+
+				currentPhysics->velocity.x = toReflect.x;
+				currentPhysics->velocity.y = toReflect.y;
+
+			} /* END BOUNCE CONDITION */
+
+			/* === TOURQUE === */
+			/* ONLY TOURQUE IF TARGET VELOCITY IS HEADING TOWARDS CURRENT */
+			if (vectorDotProduct(targetPhysics.velocity, offsetVec) > 0)
+			{
+			
+
+			} /* END TOURQUE CONDITION */
+		} /* END COLLISION DATA LOOP */
+	} /* END COLLISION OBJECT LOOP */
 }
 
-/* MODULE MAIN FUNCTION */
+/* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
 {
 	while (TRUE)
@@ -645,6 +721,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			/* handle all collisions */
 			updateCollisions();
+
+			/* handle velocity changes from collisions */
+			updateCollisionVelocities();
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
@@ -682,7 +761,7 @@ VFAPI void vfInit(void)
 	_tBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
 		sizeof(vfTransform) * VF_BUFFER_SIZE_INIT);
 	_tBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(int) * VF_BUFFER_SIZE_INIT);
+		sizeof(field) * VF_BUFFER_SIZE_INIT);
 	_tBSize = VF_BUFFER_SIZE_INIT;
 
 	/* INIT FINAL TRANSFORM BUFFER */
@@ -693,14 +772,14 @@ VFAPI void vfInit(void)
 	_pBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
 		sizeof(vfParticle) * VF_BUFFER_SIZE_INIT);
 	_pBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(int) * VF_BUFFER_SIZE_INIT);
+		sizeof(field) * VF_BUFFER_SIZE_INIT);
 	_pBSize = VF_BUFFER_SIZE_INIT;
 
 	/* INIT BOUND BUFFER */
 	_bBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
 		sizeof(vfBound) * VF_BUFFER_SIZE_INIT);
 	_bBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(int) * VF_BUFFER_SIZE_INIT);
+		sizeof(field) * VF_BUFFER_SIZE_INIT);
 	_bBSize = VF_BUFFER_SIZE_INIT;
 
 	/* INIT BOUNDQUAD BUFFER */
@@ -711,7 +790,7 @@ VFAPI void vfInit(void)
 	_eBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
 		sizeof(vfEntity) * VF_BUFFER_SIZE_INIT);
 	_eBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(int) * VF_BUFFER_SIZE_INIT);
+		sizeof(field) * VF_BUFFER_SIZE_INIT);
 	_eBSize = VF_BUFFER_SIZE_INIT;
 
 	/* init module main thread */
