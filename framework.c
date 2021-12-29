@@ -641,13 +641,20 @@ static inline void updateCollisionVelocities(void)
 				(velTarget.x * targetRatio);
 			float weightedVY = (velCurrent.y * currentRatio) +
 				(velTarget.y * targetRatio);
-			currentPhysics->velocity = VECT(weightedVX, weightedVY);
-
-			/* === BOUNCE === */
-			/* only bounce if current velocity is headed towards target */
+			
+			/* get direction towards current */
 			vfVector targetAverage = _bqBuffer[i].collisionTargetAverage[j];
 			vfVector offsetVec = VECT(targetAverage.x - currentQuad->average.x,
 				targetAverage.y - currentQuad->average.y);
+
+			/* only update velocity if it is towards current */
+			if (vectorDotProduct(VECT(weightedVX, weightedVY), offsetVec) < 0)
+			{
+				currentPhysics->velocity = VECT(weightedVX, weightedVY);
+			}
+
+			/* === BOUNCE === */
+			/* only bounce if current velocity is headed towards target */
 			if (vectorDotProduct(currentPhysics->velocity, offsetVec) > 0)
 			{
 				/* account for bounce */
