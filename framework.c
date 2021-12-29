@@ -61,6 +61,8 @@ typedef struct boundQuad
 	vfVector verts[4];
 	vfVector average;
 
+	vfBound staticData;
+
 } boundQuad;
 
 /* projVect struct definition */
@@ -359,6 +361,7 @@ static inline void updateBoundquadValues(void)
 		dims.x += pos.x; dims.y += pos.y;
 		boundQuad bQuad = createBoundQuad(VECT(pos.x, pos.y), VECT(pos.x, dims.y),
 			VECT(dims.x, dims.y), VECT(dims.x, pos.y));
+		bQuad.staticData = toConvert;
 
 		/* offset bQuad by transform and rotate by angle */
 		for (int j = 0; j < 4; j++)
@@ -367,6 +370,14 @@ static inline void updateBoundquadValues(void)
 				tFinal.scale);
 			bQuad.verts[j].x += tFinal.position.x;
 			bQuad.verts[j].y += tFinal.position.y;
+		}
+
+		/* clear bQuad collision data */
+		bQuad.collisionAccumulator = VECT(0, 0);
+		bQuad.collisions = 0;
+		for (int j = 0; j < 32; j++)
+		{
+			bQuad.collisionData[j] = VECT(0, 0);
 		}
 
 		/* calculate average */
@@ -391,7 +402,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 
 	/* variable to keep track of smallest pushback vector */
 	float smallestMag = -1;
-	vfVector smallestPVect;
+	vfVector smallestPVect = VECT(0, 0);
 
 	/* firstly, get all edges to project vertexes onto */
 	projVect projBuff[8];
@@ -514,6 +525,12 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* IF OVERLAP */
 	if (collisionCount == 8)
 	{
+		/* check if target is static */
+		if (!target->staticData.physics->moveable) return 1;
+
+		/* check for NaN */
+		if (isnan(smallestPVect.x)) smallestPVect.x = 0;
+		if (isnan(smallestPVect.y)) smallestPVect.y = 0;
 		/* negative pushback vector */
 		target->collisionData[target->collisions++].x = -smallestPVect.x / 2.0f;
 		target->collisionData[target->collisions++].y = -smallestPVect.y / 2.0f;
@@ -525,12 +542,6 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 /* ======== COLLISION HANDLING FUNCTION ======== */
 static inline void updateCollisions(void)
 {
-	/* loop through all bounds and check for collisions */
-	for (int i = 0; i < _bBSize; i++)
-	{
-		_bqBuffer[i].collisions = 0;
-	}
-
 	/* GET COLLISION DATA */
 	for (int i = 0; i < _bBSize; i++)
 	{
@@ -547,7 +558,6 @@ static inline void updateCollisions(void)
 	for (int i = 0; i < _bBSize; i++)
 	{
 		if (!_bBufferField[i]) continue;
-		_bqBuffer[i].collisionAccumulator = VECT(0, 0);
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
 		{
 			if (isnan(_bqBuffer[i].collisionData[k].x) ||
@@ -605,14 +615,14 @@ static DWORD WINAPI vfMain(void* params)
 			exit(1);
 		}
 
-		/* update fTransform objects */
-		updateFinalTransforms();
-
-		/* update boundquad values */
-		updateBoundquadValues();
-
 		if (_pEnabled)
 		{
+			/* update fTransform objects */
+			updateFinalTransforms();
+
+			/* update boundquad values */
+			updateBoundquadValues();
+
 			/* dampen entity velocities */
 			updateEntityVelocities();
 
@@ -1012,6 +1022,7 @@ VFAPI void vfRenderBounds(void)
 	}
 
 	/* render bound */
+	vgLineSize(2.5f);
 	for (int i = 0; i < _bBSize; i++)
 	{
 
@@ -1048,6 +1059,7 @@ VFAPI void vfRenderBounds(void)
 		
 		vgRenderLayer(0);
 	}
+	vgLineSize(1.0f);
 }
 
 /* PHYSICS RELATED FUNCTIONS */
