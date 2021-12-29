@@ -341,7 +341,7 @@ static inline void updateEntityVelocities(void)
 		vfEntity* ent = _eBuffer + i;
 
 		/* if inactive, skip */
-		if (!EBOUND(i)->active) continue;
+		if (!ent->physics.active) continue;
 
 		/* update transform members */
 		vfPhysics* pObj = &(ent->physics);
@@ -413,8 +413,10 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* check if max collisions reached */
 	if (source->collisions == VF_COLLISIONS_MAX) return 0;
 	if (target->collisions == VF_COLLISIONS_MAX) return 0;
-	if (!source->staticData.active) return 0; /* if not active, ignore */
-	if (!target->staticData.active) return 0; /* if not active, ignore */
+
+	/* if bounds not active, ignore */
+	if (!source->staticData.active) return 0; 
+	if (!target->staticData.active) return 0;
 
 	/* grab the vector from target to source, this will be */
 	/* handy later */
@@ -555,6 +557,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 
 		/* check if target is static */
 		if (!target->staticData.physics->moveable) return 1;
+		if (!target->staticData.physics->active) return 1;
 
 		/* check for NaN */
 		if (isnan(smallestPVect.x)) smallestPVect.x = 0;
@@ -564,6 +567,13 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		float massTotal = target->staticData.physics->mass +
 			source->staticData.physics->mass;
 		float massPercent = 1.0f - (target->staticData.physics->mass / massTotal);
+
+		/* if current is immovable or physics is inactive, massPercent is 1.0 */
+		if (!source->staticData.physics->moveable || 
+			!source->staticData.physics->active)
+		{
+			massPercent = 1.0f;
+		}
 
 		/* negative pushback vector */
 		target->collisionData[target->collisions].x = -(smallestPVect.x * massPercent);
@@ -582,8 +592,9 @@ static inline void updateCollisions(void)
 	/* GET COLLISION DATA */
 	for (int i = 0; i < _bBSize; i++)
 	{
-		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
+
+		/* if bounds inactive, skip */
 		if (!_bqBuffer[i].staticData.active) continue;
 
 		for (int j = 0; j < _bBSize; j++)
@@ -598,7 +609,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
-		if (!_bqBuffer[i].staticData.active) continue;
+		if (!_bqBuffer[i].staticData.physics->active) continue;
 
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
 		{
@@ -614,7 +625,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not used or not active, skip */
 		if (!_bBufferField[i]) continue;
-		if (!_bqBuffer[i].staticData.active) continue;
+		if (!_bqBuffer[i].staticData.physics->active) continue;
 
 		vfVector pushBack = _bqBuffer[i].collisionAccumulator;
 		float pMag = vectorMagnitude(pushBack);
@@ -644,7 +655,7 @@ static inline void updateCollisionVelocities(void)
 	{
 		if (!_bBufferField[i]) continue; /* check active */
 		if (!_bqBuffer[i].collisions) continue; /* check collided */
-		if (!_bqBuffer[i].staticData.active) continue; /* inactive; avoid */
+		if (!_bqBuffer[i].staticData.physics->active) continue; /* inactive; avoid */
 
 		/* loop through all collision data */
 		for (int j = 0; j < _bqBuffer[i].collisions; j++)
@@ -658,6 +669,14 @@ static inline void updateCollisionVelocities(void)
 			float massTotal = currentPhysics->mass + targetPhysics.mass;
 			float currentRatio = currentPhysics->mass / massTotal;
 			float targetRatio = targetPhysics.mass / massTotal;
+
+			/* if target is immovable or physics inactive */
+			/* change ratio */
+			if (!targetPhysics.active || !targetPhysics.moveable)
+			{
+				currentRatio = 0;
+				targetRatio = 1;
+			}
 
 			/* weighted average the velocities accordingly */
 			vfVector velCurrent = currentPhysics->velocity;
@@ -673,14 +692,16 @@ static inline void updateCollisionVelocities(void)
 				targetAverage.y - currentQuad->average.y);
 
 			/* only update velocity if it is towards current */
-			if (vectorDotProduct(VECT(weightedVX, weightedVY), offsetVec) < 0)
+			if (vectorDotProduct(VECT(weightedVX, weightedVY), offsetVec) 
+				< VF_VECTOR_SIMILARITY_THRESOLD)
 			{
 				currentPhysics->velocity = VECT(weightedVX, weightedVY);
 			}
 
 			/* === BOUNCE === */
 			/* only bounce if current velocity is headed towards target */
-			if (vectorDotProduct(currentPhysics->velocity, offsetVec) > 0)
+			if (vectorDotProduct(currentPhysics->velocity, offsetVec) > 
+				-VF_VECTOR_SIMILARITY_THRESOLD)
 			{
 				/* account for bounce */
 				/* grab current velocity and reflect it based on collision edge */
@@ -710,7 +731,6 @@ static inline void updateCollisionVelocities(void)
 				currentPhysics->velocity.y = weightY;
 
 			} /* END BOUNCE CONDITION */
-
 
 			/* get inital and predicted velocity */
 			vfVector tPosInitial = targetAverage;
@@ -1024,6 +1044,7 @@ VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 	rPhys.velocity = VECT(0, 0);
 	rPhys.tourque = FALSE;
 	rPhys.rotationLock = FALSE;
+	rPhys.active = TRUE;
 
 	return rPhys;
 }
@@ -1039,6 +1060,7 @@ VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
 	rPhys.velocity = VECT(0, 0);
 	rPhys.tourque = 0;
 	rPhys.rotationLock = rotationLock;
+	rPhys.active = TRUE;
 	
 	return rPhys;
 }
