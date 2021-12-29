@@ -96,6 +96,15 @@ static inline boundQuad createBoundQuad(vfVector bL, vfVector tL, vfVector tR,
 	bQ.verts[TR] = tR;
 	bQ.verts[BR] = bR;
 	bQ.average = VECT(0, 0);
+	bQ.collisionAccumulator = VECT(0, 0);
+
+	/* empty buffers */
+	for (int i = 0; i < VF_COLLISIONS_MAX; i++)
+	{
+		bQ.collisionData[i] = VECT(0, 0);
+		bQ.collisionEdge[i] = VECT(0, 0);
+		bQ.collisionTargetAverage[i] = VECT(0, 0);
+	}
 	return bQ;
 }
 
@@ -344,7 +353,7 @@ static inline void updateEntityVelocities(void)
 		pObj->velocity.y *= (1.0f - pObj->drag);
 		pObj->tourque *= (1.0f - pObj->drag);
 
-		/* clamp torque */
+		/* clamp tourque */
 		if (pObj->tourque > VF_TOURQUE_MAX) pObj->tourque = VF_TOURQUE_MAX;
 		if (pObj->tourque < -VF_TOURQUE_MAX) pObj->tourque = -VF_TOURQUE_MAX;
 	}
@@ -402,6 +411,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* check if max collisions reached */
 	if (source->collisions == VF_COLLISIONS_MAX) return 0;
 	if (target->collisions == VF_COLLISIONS_MAX) return 0;
+	if (!source->staticData.active) return 0; /* if not active, ignore */
+	if (!target->staticData.active) return 0; /* if not active, ignore */
 
 	/* grab the vector from target to source, this will be */
 	/* handy later */
@@ -720,9 +731,14 @@ static inline void updateCollisionVelocities(void)
 				float tTourque = tourque * currentRatio;
 				tTourque *= vectorMagnitude(currentPhysics->velocity);
 
-				currentPhysics->tourque += cTourque;
-				currentQuad->collisionPhysics[j]->tourque += tTourque;
-
+				if (!currentPhysics->rotationLock)
+				{
+					currentPhysics->tourque += cTourque;
+				}
+				if (!targetPhysics.rotationLock)
+				{
+					currentQuad->collisionPhysics[j]->tourque += tTourque;
+				}
 			} /* TOURQUE GATE END */
 		} /* END COLLISION DATA LOOP */
 	} /* END COLLISION OBJECT LOOP */
