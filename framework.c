@@ -55,7 +55,7 @@ typedef struct boundQuad
 {
 	unsigned short collisions;
 	vfVector collisionData[VF_COLLISIONS_MAX];
-	float collisionMass[VF_COLLISIONS_MAX];
+	vfPhysics collisionPhysics[VF_COLLISIONS_MAX];
 	vfVector collisionAccumulator;
 
 	vfVector verts[4];
@@ -375,7 +375,7 @@ static inline void updateBoundquadValues(void)
 		/* clear bQuad collision data */
 		bQuad.collisionAccumulator = VECT(0, 0);
 		bQuad.collisions = 0;
-		for (int j = 0; j < 32; j++)
+		for (int j = 0; j < VF_COLLISIONS_MAX; j++)
 		{
 			bQuad.collisionData[j] = VECT(0, 0);
 		}
@@ -392,8 +392,8 @@ static inline void updateBoundquadValues(void)
 static inline int collisionCheck(boundQuad* source, boundQuad* target)
 {
 	/* check if max collisions reached */
-	if (source->collisions == 32) return 0;
-	if (target->collisions == 32) return 0;
+	if (source->collisions == VF_COLLISIONS_MAX) return 0;
+	if (target->collisions == VF_COLLISIONS_MAX) return 0;
 
 	/* grab the vector from target to source, this will be */
 	/* handy later */
@@ -525,15 +525,26 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* IF OVERLAP */
 	if (collisionCount == 8)
 	{
+		/* set collision physics value */
+		target->collisionPhysics[target->collisions] =
+			*source->staticData.physics;
+
 		/* check if target is static */
 		if (!target->staticData.physics->moveable) return 1;
 
 		/* check for NaN */
 		if (isnan(smallestPVect.x)) smallestPVect.x = 0;
 		if (isnan(smallestPVect.y)) smallestPVect.y = 0;
+
+		/* get pushvector ratio */
+		float massTotal = target->staticData.physics->mass +
+			source->staticData.physics->mass;
+		float massPercent = 1.0f - (target->staticData.physics->mass / massTotal);
+
 		/* negative pushback vector */
-		target->collisionData[target->collisions++].x = -smallestPVect.x / 2.0f;
-		target->collisionData[target->collisions++].y = -smallestPVect.y / 2.0f;
+		target->collisionData[target->collisions].x = -(smallestPVect.x * massPercent);
+		target->collisionData[target->collisions].y = -(smallestPVect.y * massPercent);
+		target->collisions++;
 	}
 
 	return 1;
@@ -589,7 +600,13 @@ static inline void updateCollisions(void)
 			TFORM(_bBuffer[i].body)->position.y += pushBack.y;
 		}
 
-	}
+	} /* COLLISION APPLICATION LOOP END */
+}
+
+/* ========== PHYSICS PUSHBACK HANDLER ========== */
+static inline void updatePhysicsPushback(void)
+{
+	/* loop through */
 }
 
 /* MODULE MAIN FUNCTION */
@@ -860,7 +877,24 @@ VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 	rPhys.moveable = TRUE;
 	rPhys.velocity = VECT(0, 0);
 	rPhys.tourque = 0;
+	rPhys.rotationLock = 0;
 
+	return rPhys;
+}
+
+VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
+	int moveable, int rotationLock)
+{
+	vfPhysics rPhys;
+	rPhys.bounciness = bounciness;
+	rPhys.drag = drag;
+	rPhys.mass = mass;
+	rPhys.active = TRUE;
+	rPhys.moveable = moveable;
+	rPhys.velocity = VECT(0, 0);
+	rPhys.tourque = 0;
+	rPhys.rotationLock = rotationLock;
+	
 	return rPhys;
 }
 

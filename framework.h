@@ -49,6 +49,7 @@
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
+#define PHYSA(b, d, m, mov, rot) vfCreatePhysicsa(b, d, m, mov, rot)
 #define ENT(eHndl) vfGetEntity(eHndl)
 #define PCLE(pHndl) vfGetParticle(pHndl)
 #define ETRANSFORM(eHndl) vfGetTransformEnt(eHndl)
@@ -87,6 +88,7 @@ typedef struct vfPhysics
 {
 	int active;
 	int moveable;
+	int rotationLock;
 	float bounciness;
 	float drag;
 	float mass;
@@ -150,6 +152,8 @@ VFAPI vfHandle vfCreateParticlet(vfHandle transform);
 VFAPI vfHandle vfCreateParticlea(vfHandle transform, vgTexture texture,
 	vgShape shape, unsigned char layer);
 VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass);
+VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
+	int moveable, int rotationLock);
 VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 	vgTexture texture, vfPhysics physics, vfVector boundPosition, 
 	vfVector boundDimensions);
