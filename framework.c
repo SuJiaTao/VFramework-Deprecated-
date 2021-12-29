@@ -343,6 +343,10 @@ static inline void updateEntityVelocities(void)
 		pObj->velocity.x *= (1.0f - pObj->drag);
 		pObj->velocity.y *= (1.0f - pObj->drag);
 		pObj->tourque *= (1.0f - pObj->drag);
+
+		/* clamp torque */
+		if (pObj->tourque > VF_TOURQUE_MAX) pObj->tourque = VF_TOURQUE_MAX;
+		if (pObj->tourque < -VF_TOURQUE_MAX) pObj->tourque = -VF_TOURQUE_MAX;
 	}
 }
 
