@@ -57,7 +57,7 @@ typedef struct boundQuad
 {
 	unsigned short collisions;
 	vfVector collisionData[VF_COLLISIONS_MAX];
-	vfPhysics collisionPhysics[VF_COLLISIONS_MAX];
+	vfPhysics* collisionPhysics[VF_COLLISIONS_MAX];
 	vfVector collisionEdge[VF_COLLISIONS_MAX];
 	vfVector collisionTargetAverage[VF_COLLISIONS_MAX];
 	vfVector collisionAccumulator;
@@ -534,7 +534,7 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	{
 		/* set collision physics value */
 		target->collisionPhysics[target->collisions] =
-			*source->staticData.physics;
+			source->staticData.physics;
 
 		/* check if target is static */
 		if (!target->staticData.physics->moveable) return 1;
@@ -627,7 +627,7 @@ static inline void updateCollisionVelocities(void)
 			/* get physics and quad data */
 			boundQuad* currentQuad = _bqBuffer + i;
 			vfPhysics* currentPhysics = currentQuad->staticData.physics;
-			vfPhysics targetPhysics = currentQuad->collisionPhysics[j];
+			vfPhysics targetPhysics = *currentQuad->collisionPhysics[j];
 
 			/* get mass ratio */
 			float massTotal = currentPhysics->mass + targetPhysics.mass;
@@ -704,9 +704,13 @@ static inline void updateCollisionVelocities(void)
 				float tourque = angle1 - angle0;
 
 				/* scale by mass */
-				tourque *= targetRatio;
-				tourque *= tVelMag;
-				currentPhysics->tourque += tourque;
+				float cTourque = tourque * targetRatio;
+				cTourque *= tVelMag;
+				float tTourque = tourque * currentRatio;
+				tTourque *= vectorMagnitude(currentPhysics->velocity);
+
+				currentPhysics->tourque += cTourque;
+				currentQuad->collisionPhysics[j]->tourque += tTourque;
 
 			} /* TOURQUE GATE END */
 		} /* END COLLISION DATA LOOP */
