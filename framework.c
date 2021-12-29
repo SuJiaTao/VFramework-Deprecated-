@@ -653,8 +653,6 @@ static inline void updateCollisionVelocities(void)
 				/* account for bounce */
 				/* grab current velocity and reflect it based on collision edge */
 				vfVector toReflect = currentPhysics->velocity;
-				toReflect.x *= currentPhysics->bounciness;
-				toReflect.y *= currentPhysics->bounciness;
 
 				/* get collision edge and normalize */
 				vfVector collisionEdge = currentQuad->collisionEdge[j];
@@ -669,18 +667,17 @@ static inline void updateCollisionVelocities(void)
 				toReflect.x -= collisionEdge.x;
 				toReflect.y -= collisionEdge.y;
 
-				currentPhysics->velocity.x = toReflect.x;
-				currentPhysics->velocity.y = toReflect.y;
+				float weightX = (currentPhysics->velocity.x * 
+					(1.0f - currentPhysics->bounciness)) + 
+					(toReflect.x * (currentPhysics->bounciness));
+				float weightY = (currentPhysics->velocity.y *
+					(1.0f - currentPhysics->bounciness)) +
+					(toReflect.y * (currentPhysics->bounciness));
+
+				currentPhysics->velocity.x = weightX;
+				currentPhysics->velocity.y = weightY;
 
 			} /* END BOUNCE CONDITION */
-
-			/* === TOURQUE === */
-			/* ONLY TOURQUE IF TARGET VELOCITY IS HEADING TOWARDS CURRENT */
-			if (vectorDotProduct(targetPhysics.velocity, offsetVec) > 0)
-			{
-			
-
-			} /* END TOURQUE CONDITION */
 		} /* END COLLISION DATA LOOP */
 	} /* END COLLISION OBJECT LOOP */
 }
