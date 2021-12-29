@@ -627,7 +627,7 @@ static inline void updateCollisionVelocities(void)
 			/* get physics and quad data */
 			boundQuad* currentQuad = _bqBuffer + i;
 			vfPhysics* currentPhysics = currentQuad->staticData.physics;
-			vfPhysics targetPhysics = currentQuad->collisionPhysics[i];
+			vfPhysics targetPhysics = currentQuad->collisionPhysics[j];
 
 			/* get mass ratio */
 			float massTotal = currentPhysics->mass + targetPhysics.mass;
@@ -678,6 +678,37 @@ static inline void updateCollisionVelocities(void)
 				currentPhysics->velocity.y = weightY;
 
 			} /* END BOUNCE CONDITION */
+
+
+			/* get inital and predicted velocity */
+			vfVector tPosInitial = targetAverage;
+			vfVector tPosPredict = VECT(tPosInitial.x + targetPhysics.velocity.x,
+				tPosInitial.y + targetPhysics.velocity.y);
+
+			/* magnitude and dot product gate */
+			float tVelMag = vectorMagnitude(targetPhysics.velocity);
+			float dProduct = vectorDotProduct(offsetVec, targetPhysics.velocity);
+
+			/* APPLY TOURQUE */
+			if (tVelMag > VF_TOURQUE_MIN_VELOCITY && dProduct < 0)
+			{
+				/* get position relative to current average */
+				vfVector v0 = VECT(tPosInitial.x - currentQuad->average.x,
+					tPosInitial.y - currentQuad->average.y);
+				vfVector v1 = VECT(tPosPredict.x - currentQuad->average.x,
+					tPosPredict.y - currentQuad->average.y);
+
+				/* get change in angle */
+				float angle0 = atan2f(v0.y, v0.x);
+				float angle1 = atan2f(v1.y, v1.x);
+				float tourque = angle1 - angle0;
+
+				/* scale by mass */
+				tourque *= targetRatio;
+				tourque *= tVelMag;
+				currentPhysics->tourque += tourque;
+
+			} /* TOURQUE GATE END */
 		} /* END COLLISION DATA LOOP */
 	} /* END COLLISION OBJECT LOOP */
 }

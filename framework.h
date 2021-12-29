@@ -45,6 +45,7 @@
 #define VF_MUTEX_DEADLOCK_INTERVAL 0x80
 #define VF_MUTEX_RENDERBOUNDS_INTERVAL 0x10
 #define VF_PUSHBACK_MAGNITUDE_MAX 0x20
+#define VF_TOURQUE_MIN_VELOCITY 0.05f
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
