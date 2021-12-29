@@ -339,7 +339,6 @@ static inline void updateEntityVelocities(void)
 		if (!_eBufferField[i]) continue;
 
 		vfEntity* ent = _eBuffer + i;
-		if (!ent->physics.active) continue;
 
 		/* update transform members */
 		vfPhysics* pObj = &(ent->physics);
@@ -580,6 +579,7 @@ static inline void updateCollisions(void)
 	/* GET COLLISION DATA */
 	for (int i = 0; i < _bBSize; i++)
 	{
+		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
 
 		for (int j = 0; j < _bBSize; j++)
@@ -592,7 +592,9 @@ static inline void updateCollisions(void)
 	/* ACCUMULATE COLLISION DATA */
 	for (int i = 0; i < _bBSize; i++)
 	{
+		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
+
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
 		{
 			if (isnan(_bqBuffer[i].collisionData[k].x) ||
@@ -605,6 +607,7 @@ static inline void updateCollisions(void)
 	/* APPLY COLLISION DATA */
 	for (int i = 0; i < _bBSize; i++)
 	{
+		/* if not used or not active, skip */
 		if (!_bBufferField[i]) continue;
 
 		vfVector pushBack = _bqBuffer[i].collisionAccumulator;
@@ -635,6 +638,7 @@ static inline void updateCollisionVelocities(void)
 	{
 		if (!_bBufferField[i]) continue; /* check active */
 		if (!_bqBuffer[i].collisions) continue; /* check collided */
+		if (!_bqBuffer[i].staticData.active) continue; /* inactive; avoid */
 
 		/* loop through all collision data */
 		for (int j = 0; j < _bqBuffer[i].collisions; j++)
@@ -995,7 +999,6 @@ VFAPI vfHandle vfCreateParticlea(vfHandle transform, vgTexture texture,
 
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
-	rParticle->active = TRUE;
 	rParticle->layer = layer;
 	rParticle->filter = vfCreateColor(255, 255, 255, 255);
 	rParticle->texture = texture;
@@ -1011,11 +1014,10 @@ VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 	rPhys.bounciness = bounciness;
 	rPhys.drag = drag;
 	rPhys.mass = mass;
-	rPhys.active = TRUE;
 	rPhys.moveable = TRUE;
 	rPhys.velocity = VECT(0, 0);
-	rPhys.tourque = 0;
-	rPhys.rotationLock = 0;
+	rPhys.tourque = FALSE;
+	rPhys.rotationLock = FALSE;
 
 	return rPhys;
 }
@@ -1027,7 +1029,6 @@ VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
 	rPhys.bounciness = bounciness;
 	rPhys.drag = drag;
 	rPhys.mass = mass;
-	rPhys.active = TRUE;
 	rPhys.moveable = moveable;
 	rPhys.velocity = VECT(0, 0);
 	rPhys.tourque = 0;

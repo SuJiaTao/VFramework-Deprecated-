@@ -88,7 +88,6 @@ typedef struct vfTransform
 
 typedef struct vfPhysics
 {
-	int active;
 	int moveable;
 	int rotationLock;
 	float bounciness;
