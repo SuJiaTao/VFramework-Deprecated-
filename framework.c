@@ -340,6 +340,9 @@ static inline void updateEntityVelocities(void)
 
 		vfEntity* ent = _eBuffer + i;
 
+		/* if inactive, skip */
+		if (!EBOUND(i)->active) continue;
+
 		/* update transform members */
 		vfPhysics* pObj = &(ent->physics);
 		vfTransform* entityTransform = vfGetTransform(ent->transform);
@@ -581,6 +584,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
+		if (!_bqBuffer[i].staticData.active) continue;
 
 		for (int j = 0; j < _bBSize; j++)
 		{
@@ -594,6 +598,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
+		if (!_bqBuffer[i].staticData.active) continue;
 
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
 		{
@@ -609,6 +614,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not used or not active, skip */
 		if (!_bBufferField[i]) continue;
+		if (!_bqBuffer[i].staticData.active) continue;
 
 		vfVector pushBack = _bqBuffer[i].collisionAccumulator;
 		float pMag = vectorMagnitude(pushBack);
@@ -947,7 +953,7 @@ VFAPI vfHandle vfCreateBoundt(vfHandle body)
 	/* set value */
 	vfBound* rBound = _bBuffer + bIndex;
 	rBound->body = body;
-	rBound->active = 1;
+	rBound->active = TRUE;
 	rBound->physics = NULL;
 
 	return bIndex;
@@ -966,7 +972,7 @@ VFAPI vfHandle vfCreateBounda(vfHandle body, vfVector position,
 	rBound->body = body;
 	rBound->position = position;
 	rBound->dimensions = dimensions;
-	rBound->active = 1;
+	rBound->active = TRUE;
 	rBound->physics = NULL;
 
 	return bIndex;
