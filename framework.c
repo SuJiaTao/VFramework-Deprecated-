@@ -564,26 +564,38 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* IF OVERLAP */
 	if (collisionCount == 8)
 	{
-		/* set collision physics value */
-		target->collisionPhysics[target->collisions] =
-			source->staticData.physics;
+		/* check if target is missing entity */
+		if (target->staticData.entity == VF_NOENTITY) return 1;
+
+		/* carry over physics data */
+		if (source->staticData.entity == VF_NOENTITY)
+		{
+			/* if bound is missing physics, set ptr to null */
+			target->collisionPhysics[target->collisions] = NULL;
+		}
+		else
+		{
+			target->collisionPhysics[target->collisions] =
+				&EPHYSICS(source->staticData.entity);
+		}
 
 		/* check if target is static */
-		if (!target->staticData.physics->moveable) return 1;
-		if (!target->staticData.physics->active) return 1;
+		if (!EPHYSICS(target->staticData.entity).moveable) return 1;
+		if (!EPHYSICS(target->staticData.entity).active) return 1;
 
 		/* check for NaN */
 		if (isnan(smallestPVect.x)) smallestPVect.x = 0;
 		if (isnan(smallestPVect.y)) smallestPVect.y = 0;
 
 		/* get pushvector ratio */
-		float massTotal = target->staticData.physics->mass +
-			source->staticData.physics->mass;
-		float massPercent = 1.0f - (target->staticData.physics->mass / massTotal);
+		vfPhysics* targetPhys = &(EPHYSICS(target->staticData.entity));
+		vfPhysics* sourcePhys = &(EPHYSICS(target->staticData.entity));
+		float massTotal = targetPhys->mass + sourcePhys->mass;
+		float massPercent = 1.0f - (targetPhys->mass / massTotal);
 
 		/* if current is immovable or physics is inactive, massPercent is 1.0 */
-		if (!source->staticData.physics->moveable || 
-			!source->staticData.physics->active)
+		if (!sourcePhys->moveable ||
+			!sourcePhys->active)
 		{
 			massPercent = 1.0f;
 		}
@@ -622,7 +634,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
-		if (!_bqBuffer[i].staticData.physics->active) continue;
+		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue;
 
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
 		{
@@ -638,7 +650,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not used or not active, skip */
 		if (!_bBufferField[i]) continue;
-		if (!_bqBuffer[i].staticData.physics->active) continue;
+		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue;
 
 		vfVector pushBack = _bqBuffer[i].collisionAccumulator;
 		float pMag = vectorMagnitude(pushBack);
@@ -668,15 +680,26 @@ static inline void updateCollisionVelocities(void)
 	{
 		if (!_bBufferField[i]) continue; /* check active */
 		if (!_bqBuffer[i].collisions) continue; /* check collided */
-		if (!_bqBuffer[i].staticData.physics->active) continue; /* inactive; avoid */
+		/* if physics inactive, avoid */
+		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue; 
 
 		/* loop through all collision data */
 		for (int j = 0; j < _bqBuffer[i].collisions; j++)
 		{
 			/* get physics and quad data */
 			boundQuad* currentQuad = _bqBuffer + i;
-			vfPhysics* currentPhysics = currentQuad->staticData.physics;
-			vfPhysics targetPhysics = *currentQuad->collisionPhysics[j];
+			vfPhysics* currentPhysics = &EPHYSICS(currentQuad->staticData.entity);
+
+			/* account for missing physics object */
+			vfPhysics targetPhysics;
+			if (currentQuad->collisionPhysics[j] == NULL)
+			{
+				targetPhysics = PHYSA(0, 0, 0, 0, 1);
+			}
+			else
+			{
+				targetPhysics = *currentQuad->collisionPhysics[j];
+			}
 
 			/* get mass ratio */
 			float massTotal = currentPhysics->mass + targetPhysics.mass;
@@ -997,7 +1020,7 @@ VFAPI vfHandle vfCreateBoundt(vfHandle body)
 	vfBound* rBound = _bBuffer + bIndex;
 	rBound->body = body;
 	rBound->active = TRUE;
-	rBound->physics = NULL;
+	rBound->entity = VF_NOENTITY;
 
 	return bIndex;
 }
@@ -1016,7 +1039,7 @@ VFAPI vfHandle vfCreateBounda(vfHandle body, vfVector position,
 	rBound->position = position;
 	rBound->dimensions = dimensions;
 	rBound->active = TRUE;
-	rBound->physics = NULL;
+	rBound->entity = VF_NOENTITY;
 
 	return bIndex;
 }
@@ -1109,7 +1132,7 @@ VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 	rEnt->shape = shape;
 	rEnt->texture = texture;
 	vfBound* entBounds = vfGetBound(rEnt->bounds);
-	entBounds->physics = &(rEnt->physics);
+	entBounds->entity = eIndex;
 	
 	return eIndex;
 }

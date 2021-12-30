@@ -36,12 +36,12 @@
 
 /* DEFINITIONS */
 #define VF_MAX_CHILDREN 0x10
-
 #define VF_BUFFER_SIZE_INIT 0x60
 #define VF_BUFFER_SIZE_INCREMENT 0x30
 #define VF_PARENT_SEARCH_THRESHOLD 0x20
 #define VF_COLLISIONS_MAX 0x10
 #define VF_NOPARENT UINT_MAX
+#define VF_NOENTITY UINT_MAX
 #define VF_MUTEX_DEADLOCK_INTERVAL 0x80
 #define VF_MUTEX_RENDERBOUNDS_INTERVAL 0x10
 #define VF_PUSHBACK_MAGNITUDE_MAX 0x20
@@ -107,7 +107,7 @@ typedef struct vfBound
 	vfVector position;
 	vfVector dimensions;
 
-	vfPhysics* physics;
+	vfHandle entity;
 } vfBound;
 
 typedef struct vfParticle
