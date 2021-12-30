@@ -777,12 +777,21 @@ static inline void updateCollisionVelocities(void)
 /* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
 {
+	ULONGLONG lastTime = 0;
 	while (TRUE)
 	{
 		/* sleep (optional) */
 		if (_sleepTime)
 		{
-			Sleep(_sleepTime);
+			ULONGLONG currentTime = GetTickCount64();
+			if (currentTime < lastTime + _sleepTime)
+			{
+				continue;
+			}
+			else
+			{
+				lastTime = currentTime;
+			}
 		}
 
 		/* WAIT FOR BUFFER OWNERSHIP */
