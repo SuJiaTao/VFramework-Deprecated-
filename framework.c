@@ -1277,6 +1277,7 @@ VFAPI void vfRenderBounds(void)
 
 		boundQuad bQ = _bqBuffer[i];
 		
+		/* change color based on collision properties */
 		if (bQ.collisions > 0)
 		{
 			vgColor3(255, 128, 64);
@@ -1284,6 +1285,18 @@ VFAPI void vfRenderBounds(void)
 		else
 		{
 			vgColor3(64, 200, 64);
+		}
+
+		/* if no associated entity, or physics is immovable/inactive */
+		/* set color to blue */
+		if (bQ.staticData.entity == VF_NOENTITY)
+		{
+			vgColor3(64, 180, 200);
+		}
+		else if (!EPHYSICS(bQ.staticData.entity).active ||
+			!EPHYSICS(bQ.staticData.entity).moveable)
+		{
+			vgColor3(64, 180, 200);
 		}
 
 		vgRenderLayer(128);
