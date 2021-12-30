@@ -423,6 +423,13 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	vfVector avgVect = VECT(source->average.x - target->average.x,
 		source->average.y - target->average.y);
 
+	/* if avgVect is greater than we can reasonably expect 2 colliding objects */
+	/* to be in proximity of each other, then skip */
+	float avgVectSize = fabsf(avgVect.x + avgVect.y);
+	float magThreshold = source->staticData.dimensions.x + source->staticData.dimensions.y
+		+ target->staticData.dimensions.x + target->staticData.dimensions.y;
+	if (avgVectSize > magThreshold) return 0;
+
 	/* variable to keep track of smallest pushback vector */
 	float smallestMag = -1;
 	vfVector smallestPVect = VECT(0, 0);
@@ -786,6 +793,7 @@ static DWORD WINAPI vfMain(void* params)
 			ULONGLONG currentTime = GetTickCount64();
 			if (currentTime < lastTime + _sleepTime)
 			{
+				Sleep(1);
 				continue;
 			}
 			else
