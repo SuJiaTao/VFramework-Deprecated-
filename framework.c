@@ -189,12 +189,28 @@ static inline int findBufferSpot(void** buffer, field** field, int* size,
 
 	/* wait for REALLOC permission */
 	int waitResult = WaitForSingleObject(_mutex,
-		VF_MUTEX_DEADLOCK_INTERVAL);
+		VF_MUTEX_TIMEOUT_INTERVAL);
 	if (waitResult != WAIT_OBJECT_0)
 	{
-		wchar_t errBuff[255];
-		swprintf(errBuff, 255, L"Error Code: %d", GetLastError());
-		MessageBox(NULL, L"Thread deadlock in VFramework.dll",
+		wchar_t errBuff[512];
+
+		/* for every bound there is a boundQuad */
+		int bMemSize = (sizeof(vfBound) + sizeof(boundQuad)) *
+			_bBSize;
+		/* multiply by 2 for tbuffer & tfinal */
+		int tMemSize = sizeof(vfTransform) * _tBSize * 2;
+		int eMemSize = sizeof(vfEntity) * _eBSize;
+
+		/* err log */
+		swprintf(errBuff, 512, L"Error Code: %d\nBound Count: %d\n"
+			L"Transform Count: %d\nEntity Count: %d\n"
+			L"Bytes allocated for Bounds: %d\n"
+			L"Bytes allocated for Transforms: %d\n"
+			L"Bytes allocated for Entities: %d\n", GetLastError(),
+			_bBSize, _tBSize, _eBSize, bMemSize, tMemSize, eMemSize);
+
+		/* send messageboxes */
+		MessageBox(NULL, L"Thread timeout in VFramework.dll",
 			L"FATAL ERROR", MB_OK);
 		MessageBox(NULL, errBuff, L"ERROR INFO", MB_OK);
 		exit(1);
@@ -634,6 +650,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not active, skip */
 		if (!_bBufferField[i]) continue;
+		if (_bqBuffer[i].staticData.entity == VF_NOENTITY) continue;
 		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue;
 
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
@@ -650,6 +667,7 @@ static inline void updateCollisions(void)
 	{
 		/* if not used or not active, skip */
 		if (!_bBufferField[i]) continue;
+		if (_bqBuffer[i].staticData.entity == VF_NOENTITY) continue;
 		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue;
 
 		vfVector pushBack = _bqBuffer[i].collisionAccumulator;
@@ -681,6 +699,7 @@ static inline void updateCollisionVelocities(void)
 		if (!_bBufferField[i]) continue; /* check active */
 		if (!_bqBuffer[i].collisions) continue; /* check collided */
 		/* if physics inactive, avoid */
+		if (_bqBuffer[i].staticData.entity == VF_NOENTITY) continue;
 		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue; 
 
 		/* loop through all collision data */
@@ -832,12 +851,28 @@ static DWORD WINAPI vfMain(void* params)
 		}
 
 		/* WAIT FOR BUFFER OWNERSHIP */
-		int mutStatus = WaitForSingleObject(_mutex, VF_MUTEX_DEADLOCK_INTERVAL);
+		int mutStatus = WaitForSingleObject(_mutex, VF_MUTEX_TIMEOUT_INTERVAL);
 		if (mutStatus != WAIT_OBJECT_0)
 		{
-			wchar_t errBuff[255];
-			swprintf(errBuff, 255, L"Error Code: %d", GetLastError());
-			MessageBox(NULL, L"[vfMain] Thread deadlock in VFramework.dll",
+			wchar_t errBuff[512];
+
+			/* for every bound there is a boundQuad */
+			int bMemSize = (sizeof(vfBound) + sizeof(boundQuad)) *
+				_bBSize;
+			/* multiply by 2 for tbuffer & tfinal */
+			int tMemSize = sizeof(vfTransform) * _tBSize * 2;
+			int eMemSize = sizeof(vfEntity) * _eBSize;
+
+			/* err log */
+			swprintf(errBuff, 512, L"Error Code: %d\nBound Count: %d\n"
+				L"Transform Count: %d\nEntity Count: %d\n"
+				L"Bytes allocated for Bounds: %d\n"
+				L"Bytes allocated for Transforms: %d\n"
+				L"Bytes allocated for Entities: %d\n", GetLastError(),
+				_bBSize, _tBSize, _eBSize, bMemSize, tMemSize, eMemSize);
+
+			/* send messageboxes */
+			MessageBox(NULL, L"[vfMain] Thread timewout in VFramework.dll",
 				L"FATAL ERROR", MB_OK);
 			MessageBox(NULL, errBuff, L"ERROR INFO", MB_OK);
 			exit(1);
@@ -1257,17 +1292,6 @@ VFAPI void vfRenderEntities(void)
 
 VFAPI void vfRenderBounds(void)
 {
-	/* wait for all bounds to be properly updated */
-	int wResult = WaitForSingleObject(_mutex, VF_MUTEX_RENDERBOUNDS_INTERVAL);
-	if (wResult != WAIT_OBJECT_0) /* not finished updating */
-	{
-		return;
-	}
-	else
-	{
-		ReleaseMutex(_mutex); /* release captured mutex */
-	}
-
 	/* render bound */
 	vgLineSize(2.5f);
 	for (int i = 0; i < _bBSize; i++)
