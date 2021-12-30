@@ -101,10 +101,11 @@ static inline boundQuad createBoundQuad(vfVector bL, vfVector tL, vfVector tR,
 	/* empty buffers */
 	for (int i = 0; i < VF_COLLISIONS_MAX; i++)
 	{
-		bQ.collisionData[i] = VECT(0, 0);
-		bQ.collisionEdge[i] = VECT(0, 0);
-		bQ.collisionTargetAverage[i] = VECT(0, 0);
+		_bqBuffer->collisionData[i] = VECT(0, 0);
+		_bqBuffer->collisionEdge[i] = VECT(0, 0);
+		_bqBuffer->collisionTargetAverage[i] = VECT(0, 0);
 	}
+	
 	return bQ;
 }
 
@@ -124,8 +125,8 @@ static inline vfVector vertRotateScale(vfVector vertex, float angle,
 	float scale)
 {
 	/* convert to polar */
-	const float sqrX = powf(vertex.x, 2);
-	const float sqrY = powf(vertex.y, 2);
+	const float sqrX = powf(vertex.x, 2.0f);
+	const float sqrY = powf(vertex.y, 2.0f);
 	float r = sqrtf(sqrX + sqrY);
 	float theta = atan2f(vertex.y, vertex.x);
 
@@ -371,6 +372,9 @@ static inline void updateBoundquadValues(void)
 		/* grab bound to convert */
 		vfBound toConvert = _bBuffer[i];
 
+		/* skip if inactive */
+		if (!toConvert.active) continue;
+
 		/* grab final transform */
 		vfTransform tFinal = _tFinalBuffer[toConvert.body];
 
@@ -426,8 +430,10 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* if avgVect is greater than we can reasonably expect 2 colliding objects */
 	/* to be in proximity of each other, then skip */
 	float avgVectSize = fabsf(avgVect.x + avgVect.y);
-	float magThreshold = source->staticData.dimensions.x + source->staticData.dimensions.y
-		+ target->staticData.dimensions.x + target->staticData.dimensions.y;
+	float magThreshold = ((source->staticData.dimensions.x + source->staticData.dimensions.y)
+		* TFORM(source->staticData.body)->scale)
+		+ ((target->staticData.dimensions.x + target->staticData.dimensions.y) *
+			TFORM(target->staticData.body)->scale);
 	if (avgVectSize > magThreshold) return 0;
 
 	/* variable to keep track of smallest pushback vector */
