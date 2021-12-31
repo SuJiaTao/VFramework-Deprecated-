@@ -62,6 +62,7 @@
 
 /* STRUCTURE DEFINITIONS */
 typedef unsigned int vfHandle;
+typedef void (*ENTCOLCALLBACK)(struct vfEntity* source, struct vfEntity* target);
 
 typedef struct vfVector
 {
@@ -131,6 +132,7 @@ typedef struct vfEntity
 	vfHandle bounds;
 	vfPhysics physics;
 	vfHandle transform;
+	ENTCOLCALLBACK collisionCallback;
 } vfEntity;
 
 /* MODULE INIT AND TERMINATE FUNCTIONS */
@@ -164,11 +166,13 @@ VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 VFAPI void vfDestroyTransform(vfHandle transform);
 VFAPI void vfDestroyBound(vfHandle bound);
 VFAPI void vfDestroyParticle(vfHandle particle);
+VFAPI void vfDestroyEntity(vfHandle entity);
 
 /* STRUCT RELATED FUNCTIONS */
 VFAPI vfHandle vfGetTransformHandle(vfTransform* transform);
 VFAPI vfHandle vfGetBoundHandle(vfBound* bound);
 VFAPI vfHandle vfGetParticleHandle(vfParticle* particle);
+VFAPI vfHandle vfGetEntityHandle(vfEntity* entity);
 VFAPI vfTransform* vfGetTransform(vfHandle hndl);
 VFAPI vfTransform* vfGetTransformEnt(vfHandle hndl);
 VFAPI vfBound* vfGetBound(vfHandle hndl);
@@ -182,5 +186,6 @@ VFAPI void vfRenderBounds(void);
 
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);
+VFAPI void vfSetCollisionCallback(vfHandle entity, ENTCOLCALLBACK callback);
 
 #endif 

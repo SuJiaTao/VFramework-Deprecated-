@@ -568,7 +568,6 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 				}
 
 			} /* END VECTOR CHECK */
-
 		} /* END OVERLAP CHECK */
 		else
 		{
@@ -622,6 +621,17 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		target->collisionEdge[target->collisions] = smallestEdgeVect;
 		target->collisionTargetAverage[target->collisions] = source->average;
 		target->collisions++;
+
+		/* call collision callback */
+		if (source->staticData.entity != VF_NOENTITY)
+		{
+			vfEntity* cbObject = ENT(source->staticData.entity);
+			if (cbObject->collisionCallback != NULL)
+			{
+				cbObject->collisionCallback(ENT(source->staticData.entity),
+					ENT(target->staticData.entity));
+			}
+		}
 	}
 
 	return 1;
@@ -1168,6 +1178,7 @@ VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 	rEnt->texture = texture;
 	vfBound* entBounds = vfGetBound(rEnt->bounds);
 	entBounds->entity = eIndex;
+	rEnt->collisionCallback = NULL;
 	
 	return eIndex;
 }
@@ -1189,6 +1200,14 @@ VFAPI void vfDestroyParticle(vfHandle particle)
 	_pBufferField[particle] = 0;
 }
 
+VFAPI void vfDestroyEntity(vfHandle entity)
+{
+	_eBufferField[entity] = 0;
+	vfEntity* eObject = ENT(entity);
+	vfDestroyBound(eObject->bounds);
+	vfDestroyTransform(eObject->transform);
+}
+
 /* STRUCT RELATED FUNCTIONS */
 
 VFAPI vfHandle vfGetTransformHandle(vfTransform* transform)
@@ -1204,6 +1223,11 @@ VFAPI vfHandle vfGetBoundHandle(vfBound* bound)
 VFAPI vfHandle vfGetParticleHandle(vfParticle* particle)
 {
 	return particle - _pBuffer;
+}
+
+VFAPI vfHandle vfGetEntityHandle(vfEntity* entity)
+{
+	return entity - _eBuffer;
 }
 
 VFAPI vfTransform* vfGetTransform(vfHandle hndl)
@@ -1229,6 +1253,7 @@ VFAPI vfParticle* vfGetParticle(vfHandle hndl)
 
 VFAPI vfEntity* vfGetEntity(vfHandle hndl)
 {
+	if (hndl == VF_NOENTITY) return NULL;
 	return _eBuffer + hndl;
 }
 
@@ -1296,7 +1321,6 @@ VFAPI void vfRenderBounds(void)
 	vgLineSize(2.5f);
 	for (int i = 0; i < _bBSize; i++)
 	{
-
 		if (!_bBufferField[i]) continue;
 
 		boundQuad bQ = _bqBuffer[i];
@@ -1350,4 +1374,10 @@ VFAPI void vfRenderBounds(void)
 VFAPI void vfSetPhysicsState(int value)
 {
 	_pEnabled = value;
+}
+
+VFAPI void vfSetCollisionCallback(vfHandle entity, ENTCOLCALLBACK callback)
+{
+	vfEntity* ent = _eBuffer + entity;
+	ent->collisionCallback = callback;
 }
