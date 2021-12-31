@@ -18,6 +18,7 @@
 *		- Struct related functions
 *		- Rendering functions
 *		- Physics functions
+*		- Text related functions
 * 
 ******************************************************************************/
 
@@ -187,5 +188,9 @@ VFAPI void vfRenderBounds(void);
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);
 VFAPI void vfSetCollisionCallback(vfHandle entity, ENTCOLCALLBACK callback);
+
+/* TEXT RELATED FUNCTIONS */
+VFAPI vgTexture vfGetTextChar(char ascii_code);
+VFAPI vgTexture vfGetText(const char* ascii_string);
 
 #endif 

@@ -15,6 +15,7 @@
 *		- Struct destruction functions
 *		- Struct related functions
 *		- Rendering functions
+*		- Physics functions
 *
 ******************************************************************************/
 
@@ -46,11 +47,23 @@ static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 
 /* internal buffers */
+
+/* TRANSFORM RELATED DATA */
 static vfTransform* _tBuffer; static field* _tBufferField; static int _tBSize;
 static vfTransform* _tFinalBuffer;
+static int _tCount;
+
+/* PARTICLE RELATED DATA */
 static vfParticle* _pBuffer; static field* _pBufferField; static int _pBSize;
+static int _pCount;
+
+/* BOUND RELATED DATA */
 static vfBound* _bBuffer; static field* _bBufferField; static int _bBSize;
+static int _bCount;
+
+/* ENTITY RELATED DATA */
 static vfEntity* _eBuffer; static field* _eBufferField; static int _eBSize;
+static int _eCount;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -97,14 +110,6 @@ static inline boundQuad createBoundQuad(vfVector bL, vfVector tL, vfVector tR,
 	bQ.verts[BR] = bR;
 	bQ.average = VECT(0, 0);
 	bQ.collisionAccumulator = VECT(0, 0);
-
-	/* empty buffers */
-	for (int i = 0; i < VF_COLLISIONS_MAX; i++)
-	{
-		_bqBuffer->collisionData[i] = VECT(0, 0);
-		_bqBuffer->collisionEdge[i] = VECT(0, 0);
-		_bqBuffer->collisionTargetAverage[i] = VECT(0, 0);
-	}
 	
 	return bQ;
 }
@@ -202,12 +207,13 @@ static inline int findBufferSpot(void** buffer, field** field, int* size,
 		int eMemSize = sizeof(vfEntity) * _eBSize;
 
 		/* err log */
-		swprintf(errBuff, 512, L"Error Code: %d\nBound Count: %d\n"
-			L"Transform Count: %d\nEntity Count: %d\n"
+		swprintf(errBuff, 512, L"Error Code: %d\nBounds Used/Allocated: %d/%d\n"
+			L"Transforms Used/Allocated: %d/%d\nEntities Used/Allocated: %d/%d\n"
 			L"Bytes allocated for Bounds: %d\n"
 			L"Bytes allocated for Transforms: %d\n"
 			L"Bytes allocated for Entities: %d\n", GetLastError(),
-			_bBSize, _tBSize, _eBSize, bMemSize, tMemSize, eMemSize);
+			_bCount, _bBSize, _tCount, _tBSize, _eCount, _eBSize, bMemSize,
+			tMemSize, eMemSize);
 
 		/* send messageboxes */
 		MessageBox(NULL, L"Thread timeout in VFramework.dll",
@@ -414,10 +420,6 @@ static inline void updateBoundquadValues(void)
 		/* clear bQuad collision data */
 		bQuad.collisionAccumulator = VECT(0, 0);
 		bQuad.collisions = 0;
-		for (int j = 0; j < VF_COLLISIONS_MAX; j++)
-		{
-			bQuad.collisionData[j] = VECT(0, 0);
-		}
 
 		/* calculate average */
 		bQuad.average = vertexAverage(bQuad.verts, 4);
@@ -641,24 +643,33 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 static inline void updateCollisions(void)
 {
 	/* GET COLLISION DATA */
+	int outCheck = 0;
 	for (int i = 0; i < _bBSize; i++)
 	{
+		if (outCheck >= _bCount) break;
 		if (!_bBufferField[i]) continue;
 
 		/* if bounds inactive, skip */
 		if (!_bqBuffer[i].staticData.active) continue;
 
+		int inCheck = 0;
 		for (int j = 0; j < _bBSize; j++)
 		{
+			if (inCheck >= _bCount) break;
 			if (!_bBufferField[j] || j == i) continue;
 			collisionCheck(_bqBuffer + i, _bqBuffer + j);
+			inCheck++;
 		}
+
+		inCheck++;
 	}
 
 	/* ACCUMULATE COLLISION DATA */
+	int accCount = 0;
 	for (int i = 0; i < _bBSize; i++)
 	{
 		/* if not active, skip */
+		if (accCount >= _bCount) break;
 		if (!_bBufferField[i]) continue;
 		if (_bqBuffer[i].staticData.entity == VF_NOENTITY) continue;
 		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue;
@@ -670,12 +681,16 @@ static inline void updateCollisions(void)
 			_bqBuffer[i].collisionAccumulator.x += _bqBuffer[i].collisionData[k].x;
 			_bqBuffer[i].collisionAccumulator.y += _bqBuffer[i].collisionData[k].y;
 		}
+
+		accCount++;
 	}
 
 	/* APPLY COLLISION DATA */
+	int applCount = 0;
 	for (int i = 0; i < _bBSize; i++)
 	{
 		/* if not used or not active, skip */
+		if (applCount >= _bCount) break;
 		if (!_bBufferField[i]) continue;
 		if (_bqBuffer[i].staticData.entity == VF_NOENTITY) continue;
 		if (!EPHYSICS(_bqBuffer[i].staticData.entity).active) continue;
@@ -697,6 +712,7 @@ static inline void updateCollisions(void)
 			TFORM(_bBuffer[i].body)->position.y += pushBack.y;
 		}
 
+		applCount++;
 	} /* COLLISION APPLICATION LOOP END */
 }
 
@@ -704,8 +720,11 @@ static inline void updateCollisions(void)
 static inline void updateCollisionVelocities(void)
 {
 	/* loop through all objects with collisions */
+	int bCheckCount = 0;
 	for (int i = 0; i < _bBSize; i++)
 	{
+		/* if checked all bounds, end */
+		if (bCheckCount >= _bCount) return;
 		if (!_bBufferField[i]) continue; /* check active */
 		if (!_bqBuffer[i].collisions) continue; /* check collided */
 		/* if physics inactive, avoid */
@@ -836,6 +855,8 @@ static inline void updateCollisionVelocities(void)
 				}
 			} /* TOURQUE GATE END */
 		} /* END COLLISION DATA LOOP */
+
+		bCheckCount++;
 	} /* END COLLISION OBJECT LOOP */
 }
 
@@ -874,12 +895,13 @@ static DWORD WINAPI vfMain(void* params)
 			int eMemSize = sizeof(vfEntity) * _eBSize;
 
 			/* err log */
-			swprintf(errBuff, 512, L"Error Code: %d\nBound Count: %d\n"
-				L"Transform Count: %d\nEntity Count: %d\n"
+			swprintf(errBuff, 512, L"Error Code: %d\nBounds Used/Allocated: %d/%d\n"
+				L"Transforms Used/Allocated: %d/%d\nEntities Used/Allocated: %d/%d\n"
 				L"Bytes allocated for Bounds: %d\n"
 				L"Bytes allocated for Transforms: %d\n"
 				L"Bytes allocated for Entities: %d\n", GetLastError(),
-				_bBSize, _tBSize, _eBSize, bMemSize, tMemSize, eMemSize);
+				_bCount, _bBSize, _tCount, _tBSize, _eCount, _eBSize, bMemSize,
+				tMemSize, eMemSize);
 
 			/* send messageboxes */
 			MessageBox(NULL, L"[vfMain] Thread timewout in VFramework.dll",
@@ -927,6 +949,10 @@ VFAPI void vfInit(void)
 	/* init module internal data */
 	_sleepTime = 0;
 	_pEnabled = 0;
+	_tCount = 0;
+	_bCount = 0;
+	_pCount = 0;
+	_eCount = 0;
 
 	/* init mutex */
 	_mutex = CreateMutex(NULL, FALSE, NULL);
@@ -1013,6 +1039,7 @@ VFAPI vfHandle vfCreateTransformv(vfVector vector)
 	int tIndex = findBufferSpot(&_tBuffer, &_tBufferField, &_tBSize,
 		sizeof(vfTransform));
 	_tBufferField[tIndex] = 1;
+	_tCount++;
 
 	/* set values */
 	vfTransform* rTransform = _tBuffer + tIndex;
@@ -1029,6 +1056,7 @@ VFAPI vfHandle vfCreateTransforma(vfVector vector, float rotation,
 	int tIndex = findBufferSpot(&_tBuffer, &_tBufferField, &_tBSize,
 		sizeof(vfTransform));
 	_tBufferField[tIndex] = 1;
+	_tCount++;
 
 	/* set values */
 	vfTransform* rTransform = _tBuffer + tIndex;
@@ -1046,6 +1074,7 @@ VFAPI vfHandle vfCreateTransformp(vfHandle parent)
 	int tIndex = findBufferSpot(&_tBuffer, &_tBufferField, &_tBSize,
 		sizeof(vfTransform));
 	_tBufferField[tIndex] = 1;
+	_tCount++;
 
 	/* set values */
 	vfTransform* rTransform = _tBuffer + tIndex;
@@ -1060,6 +1089,7 @@ VFAPI vfHandle vfCreateBoundt(vfHandle body)
 	int bIndex = findBufferSpot(&_bBuffer, &_bBufferField, &_bBSize,
 		sizeof(vfBound));
 	_bBufferField[bIndex] = 1;
+	_bCount++;
 
 	/* set value */
 	vfBound* rBound = _bBuffer + bIndex;
@@ -1077,6 +1107,7 @@ VFAPI vfHandle vfCreateBounda(vfHandle body, vfVector position,
 	int bIndex = findBufferSpot(&_bBuffer, &_bBufferField, &_bBSize,
 		sizeof(vfBound));
 	_bBufferField[bIndex] = 1;
+	_bCount++;
 
 	/* set value */
 	vfBound* rBound = _bBuffer + bIndex;
@@ -1095,6 +1126,7 @@ VFAPI vfHandle vfCreateParticlet(vfHandle transform)
 	int pIndex = findBufferSpot(&_pBuffer, &_pBufferField, &_pBSize,
 		sizeof(vfParticle));
 	_pBufferField[pIndex] = 1;
+	_pCount++;
 
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
@@ -1113,6 +1145,7 @@ VFAPI vfHandle vfCreateParticlea(vfHandle transform, vgTexture texture,
 	int pIndex = findBufferSpot(&_pBuffer, &_pBufferField, &_pBSize,
 		sizeof(vfParticle));
 	_pBufferField[pIndex] = 1;
+	_pCount++;
 
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
@@ -1164,6 +1197,7 @@ VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 	int eIndex = findBufferSpot(&_eBuffer, &_eBufferField, &_eBSize,
 		sizeof(vfEntity));
 	_eBufferField[eIndex] = 1;
+	_eCount++;
 	
 	/* get return entity and init values */
 	vfEntity* rEnt = _eBuffer + eIndex;
@@ -1188,16 +1222,19 @@ VFAPI vfHandle vfCreateEntity(unsigned char layer, vgShape shape,
 VFAPI void vfDestroyTransform(vfHandle transform)
 {
 	_tBufferField[transform] = 0;
+	_tCount--;
 }
 
 VFAPI void vfDestroyBound(vfHandle bound)
 {
 	_bBufferField[bound] = 0;
+	_bCount--;
 }
 
 VFAPI void vfDestroyParticle(vfHandle particle)
 {
 	_pBufferField[particle] = 0;
+	_pCount--;
 }
 
 VFAPI void vfDestroyEntity(vfHandle entity)
@@ -1206,6 +1243,7 @@ VFAPI void vfDestroyEntity(vfHandle entity)
 	vfEntity* eObject = ENT(entity);
 	vfDestroyBound(eObject->bounds);
 	vfDestroyTransform(eObject->transform);
+	_eCount--;
 }
 
 /* STRUCT RELATED FUNCTIONS */
@@ -1262,11 +1300,13 @@ VFAPI vfEntity* vfGetEntity(vfHandle hndl)
 VFAPI void vfRenderParticles(void)
 {
 	int rCount = _eBSize;
+	int rendered = 0;
 
 	for (int i = 0; i < rCount; i++)
 	{
+		if (rendered >= _pCount) return;
 		if (!_pBufferField[i]) continue;
-		
+
 		vfParticle render = _pBuffer[i];
 		if (!render.active) continue;
 
@@ -1284,15 +1324,20 @@ VFAPI void vfRenderParticles(void)
 
 		vgTextureFilterReset();
 		vgRenderLayer(0);
+
+		/* increment render count */
+		rendered++;
 	}
 }
 
 VFAPI void vfRenderEntities(void)
 {
 	int eCount = _eBSize;
+	int eRendered = 0;
 
 	for (int i = 0; i < eCount; i++)
 	{
+		if (eRendered >= _eCount) return;
 		if (_eBufferField[i] == 0) continue;
 
 		vfEntity renderEnt = _eBuffer[i];
@@ -1312,6 +1357,8 @@ VFAPI void vfRenderEntities(void)
 		vgTextureFilterReset();
 		vgRenderLayer(0);
 
+		/* increment render count */
+		eRendered++;
 	}
 }
 
@@ -1319,8 +1366,11 @@ VFAPI void vfRenderBounds(void)
 {
 	/* render bound */
 	vgLineSize(2.5f);
+	int bRendered = 0;
+
 	for (int i = 0; i < _bBSize; i++)
 	{
+		if (bRendered >= _bCount) break;
 		if (!_bBufferField[i]) continue;
 
 		boundQuad bQ = _bqBuffer[i];
@@ -1366,6 +1416,9 @@ VFAPI void vfRenderBounds(void)
 		}
 		
 		vgRenderLayer(0);
+
+		/* increment render count */
+		bRendered++;
 	}
 	vgLineSize(1.0f);
 }
