@@ -7,6 +7,8 @@
 *	Contents:
 *		- Preprocessor definitions
 *		- Includes
+*		- Internal buffer structure
+*		- Internal buffer struct related functions
 *		- Internal definitions
 *		- Internal functions
 *		- Internal resources
@@ -47,6 +49,19 @@ static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 
 /* internal buffers */
+
+/* ========== BUFFER STRUCT ========== */
+typedef struct _vBuffer
+{
+	int node; /* node number, with first node being 0 */
+	int used; /* total spots used */
+	void* bufData; /* ptr to buffer data */
+	struct _vBuffer* next;
+} _vBuffer;
+/* =================================== */
+
+/* ========== BUFFER RELATED FUNCTIONS ========== */
+static inline _vBuffer* vBufferAlloc(HANDLE heap, size_t datSize);
 
 /* TRANSFORM RELATED DATA */
 static vfTransform* _tBuffer; static field* _tBufferField; static int _tBSize;
@@ -1385,11 +1400,10 @@ VFAPI void vfRenderBounds(void)
 			vgColor3(64, 200, 64);
 		}
 
-		/* if no associated entity, or physics is immovable/inactive */
-		/* set color to blue */
+		/* purple for no entity, blue for static/inactive */
 		if (bQ.staticData.entity == VF_NOENTITY)
 		{
-			vgColor3(64, 180, 200);
+			vgColor3(180, 64, 200);
 		}
 		else if (!EPHYSICS(bQ.staticData.entity).active ||
 			!EPHYSICS(bQ.staticData.entity).moveable)

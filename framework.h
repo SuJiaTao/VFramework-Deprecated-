@@ -6,6 +6,7 @@
 *	Header file for abstract graphics and utilites library
 *	Contents:
 *		- Header guard
+*		- Preprocessor directives
 *		- API definition
 *		- Includes
 *		- Definitions
@@ -24,6 +25,9 @@
 
 #ifndef __VFRAMEWORK_INCLUDE__
 #define __VFRAMEWORK_INCLUDE__
+
+/* PREPROCESSOR DIRECTIVES */
+#pragma pack(1)
 
 /* API DEFINITIONS */
 #ifdef VFRAMEWORK_EXPORTS
