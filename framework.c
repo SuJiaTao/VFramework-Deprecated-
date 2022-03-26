@@ -536,8 +536,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		if (isnan(smallestPVect.y)) smallestPVect.y = 0;
 
 		/* get pushvector ratio */
-		vfPhysics* targetPhys = &target->staticData.entity->physics;
-		vfPhysics* sourcePhys = &target->staticData.entity->physics;
+		vfPhysics* targetPhys = &(target->staticData.entity->physics);
+		vfPhysics* sourcePhys = &(target->staticData.entity->physics);
 		float massTotal = targetPhys->mass + sourcePhys->mass;
 		float massPercent = 1.0f - (targetPhys->mass / massTotal);
 
@@ -603,7 +603,7 @@ static inline void updateCollisions(void)
 		if (accCount >= _bCount) break;
 		if (!_bBufferField[i]) continue;
 		if (_bqBuffer[i].staticData.entity == VF_NOENTITY) continue;
-		if (_bqBuffer[i].staticData.entity->physics.active) continue;
+		if (!_bqBuffer[i].staticData.entity->physics.active) continue;
 
 		for (int k = 0; k < _bqBuffer[i].collisions; k++)
 		{
