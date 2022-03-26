@@ -49,8 +49,13 @@
 #define VF_MUTEX_TIMEOUT_INTERVAL 0x100
 #define VF_PUSHBACK_MAGNITUDE_MAX 0x100
 #define VF_TOURQUE_MIN_VELOCITY 0.01f
-#define VF_TOURQUE_MAX 8.0f
+#define VF_TOURQUE_MAX 3.0f
 #define VF_VECTOR_SIMILARITY_THRESOLD 0.15f
+
+#define VF_OBJ_TRANSFORM 0x10
+#define VF_OBJ_BOUND 0x20
+#define VF_OBJ_PARTICLE 0x30
+#define VF_OBJ_ENTITY 0x40
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
@@ -170,6 +175,7 @@ VFAPI vfHandle vfGetTransformHandle(vfTransform* transform);
 VFAPI vfHandle vfGetBoundHandle(vfBound* bound);
 VFAPI vfHandle vfGetParticleHandle(vfParticle* particle);
 VFAPI vfHandle vfGetEntityHandle(vfEntity* entity);
+VFAPI void* vfGetObject(vfHandle handle, int type);
 
 /* RENDERING FUNCTIONS */
 VFAPI void vfRenderParticles(void);

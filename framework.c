@@ -1233,6 +1233,39 @@ VFAPI vfHandle vfGetEntityHandle(vfEntity* entity)
 	return entity - _eBuffer;
 }
 
+VFAPI void* vfGetObject(vfHandle handle, int type)
+{
+	/* check for invalid handle */
+	if (handle > VF_BUFFER_SIZE) return NULL;
+
+	/* retu based on type */
+	switch (type)
+	{
+	case VF_OBJ_TRANSFORM:
+		return _tBuffer + handle;
+		break;
+
+	case VF_OBJ_BOUND:
+		return _bBuffer + handle;
+		break;
+
+	case VF_OBJ_PARTICLE:
+		return _pBuffer + handle;
+		break;
+
+	case VF_OBJ_ENTITY:
+		return _eBuffer + handle;
+		break;
+
+	default:
+		return NULL;
+		break;
+	}
+
+	/* bad state */
+	return NULL;
+}
+
 /* RENDERING FUNCTIONS */
 
 VFAPI void vfRenderParticles(void)
