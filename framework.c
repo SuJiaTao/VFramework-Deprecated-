@@ -748,7 +748,7 @@ static inline void updateCollisionVelocities(void)
 
 			} /* END BOUNCE CONDITION */
 
-			/* get inital and predicted velocity */
+			/* get target inital and predicted velocity */
 			vfVector tPosInitial = targetAverage;
 			vfVector tPosPredict = VECT(tPosInitial.x + targetPhysics.velocity.x,
 				tPosInitial.y + targetPhysics.velocity.y);
