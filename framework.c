@@ -53,7 +53,7 @@ static int _pEnabled; /* physics toggle */
 
 /* BIG AUXILLARY BUFFER */
 static BYTE _mTank[VF_MEMTANK_SIZE + VF_MEMTANK_EXCESS];
-static BYTE _mTField[VF_MEMTANK_SIZE / 8];
+static BYTE _mTField[VF_MEMTANK_FIELDSIZE];
 
 /* TRANSFORM RELATED DATA */
 static vfTransform* _tBuffer; static field* _tBufferField;
@@ -327,6 +327,12 @@ static inline void updateEntityVelocities(void)
 		/* clamp tourque */
 		if (pObj->tourque > VF_TOURQUE_MAX) pObj->tourque = VF_TOURQUE_MAX;
 		if (pObj->tourque < -VF_TOURQUE_MAX) pObj->tourque = -VF_TOURQUE_MAX;
+
+		/* if exists, invoke callback */
+		if (ent->updateCallback != NULL)
+		{
+			ent->updateCallback(ent);
+		}
 	}
 }
 
@@ -1429,6 +1435,11 @@ VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback)
 	entity->collisionCallback = callback;
 }
 
+VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback)
+{
+	entity->updateCallback = callback;
+}
+
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type)
 {
@@ -1557,14 +1568,15 @@ static int findFreeMTIndex(int size)
 VFAPI void* vfMTAlloc(int size, int zero)
 {
 	/* bad size condition */
-	if (size < 0 || size / 8 > VF_BUFFER_SIZE) return NULL;
+	if (size < 0 || size / VF_MEMTANK_INTERVAL > VF_BUFFER_SIZE) 
+		return NULL;
 
-	/* find lowest multiple of 8 which satisfies size */
+	/* find lowest multiple of interval which satisfies size */
 	float fsize = (float)size;
-	int sizeActual = (int)ceilf(fsize / 8);
+	int sizeActual = (int)ceilf(fsize / VF_MEMTANK_INTERVAL);
 
 	/* check for the impossible */
-	if (sizeActual * 8 < size) sizeActual++;
+	if (sizeActual * VF_MEMTANK_INTERVAL < size) sizeActual++;
 
 	/* find index */
 	int index = findFreeMTIndex(sizeActual);
@@ -1577,7 +1589,8 @@ VFAPI void* vfMTAlloc(int size, int zero)
 		_mTField[index + i] = 1;
 
 	/* check zero and return ptr */
-	if (zero) ZeroMemory(_mTank + index, sizeActual * 8);
+	if (zero) ZeroMemory(_mTank + index, 
+		sizeActual * VF_MEMTANK_INTERVAL);
 	return _mTank + index;
 }
 
@@ -1585,22 +1598,22 @@ VFAPI int vfMTFree(void* ptr, int size, int zero)
 {
 	/* check for bad ptr */
 	if (ptr == NULL || ptr < _mTank ||
-		ptr > _mTank + (VF_MEMTANK_SIZE / 8)) return 0;
+		ptr > _mTank + (VF_MEMTANK_FIELDSIZE)) return 0;
 
 	/* find lowest multiple of 8 which satisfies size */
 	float fsize = (float)size;
-	int sizeActual = (int)ceilf(fsize / 8);
+	int sizeActual = (int)ceilf(fsize / VF_MEMTANK_INTERVAL);
 
 	/* check for the impossible */
-	if (sizeActual * 8 < size) sizeActual++;
+	if (sizeActual * VF_MEMTANK_INTERVAL < size) sizeActual++;
 
 	/* free field */
-	int startIndex = ((char*)ptr - _mTank) / 8;
+	int startIndex = ((char*)ptr - _mTank) / VF_MEMTANK_INTERVAL;
 	for (int i = 0; i < sizeActual; i++)
 		_mTField[startIndex + i] = 0;
 
 	/* zero */
-	if (zero) ZeroMemory(ptr, sizeActual * 8);
+	if (zero) ZeroMemory(ptr, sizeActual * VF_MEMTANK_INTERVAL);
 
 	return 1;
 }

@@ -65,6 +65,8 @@
 
 #define VF_MEMTANK_SIZE 0x1000
 #define VF_MEMTANK_EXCESS 0x20
+#define VF_MEMTANK_INTERVAL 4
+#define VF_MEMTANK_FIELDSIZE (VF_MEMTANK_SIZE / VF_MEMTANK_INTERVAL)
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
@@ -74,6 +76,7 @@
 /* STRUCTURE DEFINITIONS */
 typedef unsigned int vfHandle;
 typedef void (*ENTCOLCALLBACK)(struct vfEntity* source, struct vfEntity* target);
+typedef void (*ENTUPDCALLBACK)(struct vfEntity* source);
 
 typedef struct vfVector
 {
@@ -143,7 +146,9 @@ typedef struct vfEntity
 	vfBound* bounds;
 	vfPhysics physics;
 	vfTransform* transform;
+
 	ENTCOLCALLBACK collisionCallback;
+	ENTUPDCALLBACK updateCallback;
 } vfEntity;
 
 /* MODULE INIT AND TERMINATE FUNCTIONS */
@@ -194,6 +199,7 @@ VFAPI void vfRenderBounds(void);
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);
 VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback);
+VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
