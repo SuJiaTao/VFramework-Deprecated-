@@ -62,6 +62,9 @@
 #define VF_BUFF_PARTICLE 0x300
 #define VF_BUFF_ENTITY 0x400
 
+#define VF_MEMTANK_SIZE 0x1000
+#define VF_MEMTANK_EXCESS 0x20
+
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
@@ -195,5 +198,7 @@ VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback);
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
 VFAPI int vfGetBufferField(void* field, int size, int type);
 VFAPI int vfGetObjectCount(int type);
+VFAPI void* vfMTAlloc(int size, int zero);
+VFAPI int vfMTFree(void* ptr, int size, int zero);
 
 #endif 
