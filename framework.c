@@ -212,7 +212,7 @@ static inline int findBufferSpot(void* buffer, field* field,
 		int searchIndex = (startIndex + i) % VF_BUFFER_SIZE;
 
 		/* empty spot */
-		if ((field)[searchIndex] == 0) return i;
+		if ((field)[searchIndex] == 0) return searchIndex;
 	}
 
 	/* CRITICAL ENGINE FAILURE: */
@@ -385,6 +385,17 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	/* if bounds not active, ignore */
 	if (!source->staticData.active) return 0; 
 	if (!target->staticData.active) return 0;
+
+	/* if the two average positions are very similar, move one over */
+	if (abs(source->average.x - target->average.x) < VF_POSITION_SIMILARITY
+		|| abs(source->average.y - target->average.y) <
+		VF_POSITION_SIMILARITY)
+	{
+		source->average.x += VF_POSITION_SIMILARITY;
+		source->average.y += VF_POSITION_SIMILARITY;
+		target->average.x -= VF_POSITION_SIMILARITY;
+		target->average.y -= VF_POSITION_SIMILARITY;
+	}
 
 	/* grab the vector from target to source, this will be */
 	/* handy later */
