@@ -18,6 +18,7 @@
 *		- Struct related functions
 *		- Rendering functions
 *		- Physics functions
+*		- Data functions
 *
 ******************************************************************************/
 
@@ -186,8 +187,8 @@ static inline int findBufferSpot(void* buffer, field* field,
 	if (buffer == NULL || field == NULL)
 	{
 		/* CRITICAL ENGINE FAILURE! */
-		MessageBoxA(NULL, "CRITICAL ENGINE FAILURE!",
-			"Engine Not Initialized Properly!", MB_OK);
+		MessageBoxA(NULL, "Engine Not Initialized Properly!",
+			"CRITICAL ENGINE FAILURE!", MB_OK);
 		exit(1);
 	}
 
@@ -212,8 +213,8 @@ static inline int findBufferSpot(void* buffer, field* field,
 
 	/* messagebox failure and exit */
 	sprintf(errMsg, "%s Buffer Full!", bufferName);
-	MessageBoxExA(NULL, "CRITICAL ENGINE FAILURE",
-		errMsg, MB_OK, 0);
+	MessageBoxExA(NULL, errMsg,
+		"CRITICAL ENGINE FAILURE", MB_OK, 0);
 	exit(1);
 }
 
@@ -1400,4 +1401,41 @@ VFAPI void vfSetPhysicsState(int value)
 VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback)
 {
 	entity->collisionCallback = callback;
+}
+
+/* DATA RELATED FUNCTIONS */
+VFAPI int vfGetBuffer(void* buffer, int size, int type)
+{
+	/* bad size check */
+	if (size < 0) return 0;
+
+	/* select buffer to read from */
+	unsigned char* pbuff;
+	switch (type)
+	{
+	case VF_BUFF_TRANSFORM:
+		pbuff = _tBuffer;
+		break;
+
+	case VF_BUFF_BOUND:
+		pbuff = _bBuffer;
+		break;
+
+	case VF_BUFF_PARTICLE:
+		pbuff = _pBuffer;
+		break;
+
+	case VF_BUFF_ENTITY:
+		pbuff = _eBuffer;
+		break;
+	
+	/* fail condition */
+	default:
+		return 0;
+		break;
+	}
+
+	/* write to user buffer */
+	memcpy(buffer, pbuff, size);
+	return 1;
 }

@@ -19,7 +19,7 @@
 *		- Struct related functions
 *		- Rendering functions
 *		- Physics functions
-*		- Text related functions
+*		- Data related functions
 * 
 ******************************************************************************/
 
@@ -56,6 +56,11 @@
 #define VF_OBJ_BOUND 0x20
 #define VF_OBJ_PARTICLE 0x30
 #define VF_OBJ_ENTITY 0x40
+
+#define VF_BUFF_TRANSFORM 0x100
+#define VF_BUFF_BOUND 0x200
+#define VF_BUFF_PARTICLE 0x300
+#define VF_BUFF_ENTITY 0x400
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
@@ -186,8 +191,7 @@ VFAPI void vfRenderBounds(void);
 VFAPI void vfSetPhysicsState(int value);
 VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback);
 
-/* TEXT RELATED FUNCTIONS */
-VFAPI vgTexture vfGetTextChar(char ascii_code);
-VFAPI vgTexture vfGetText(const char* ascii_string);
+/* DATA RELATED FUNCTIONS */
+VFAPI int vfGetBuffer(void* buffer, int size, int type);
 
 #endif 
