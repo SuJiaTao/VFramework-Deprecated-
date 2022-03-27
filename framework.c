@@ -192,17 +192,28 @@ static inline int findBufferSpot(void* buffer, field* field,
 		exit(1);
 	}
 
+	/* get buffer size */
+	int bufSize = 0;
+	if (buffer == _tBuffer) bufSize = _tCount;
+	if (buffer == _bBuffer) bufSize = _bCount;
+	if (buffer == _pBuffer) bufSize = _pCount;
+	if (buffer == _eBuffer) bufSize = _eCount;
+
+
 	/* find empty spot within field */
-	int i;
-	for (i = 0; i < VF_BUFFER_SIZE; i++)
+	int startIndex = bufSize / 2;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
+		/* calculate searchIndex */
+		int searchIndex = (startIndex + i) % VF_BUFFER_SIZE;
+
 		/* empty spot */
-		if ((field)[i] == 0) return i;
+		if ((field)[searchIndex] == 0) return i;
 	}
 
 	/* CRITICAL ENGINE FAILURE: */
 	char bufferName[0x20] = { 0 };
-	char errMsg[0xFF] = { 0 };
+	char errMsg[0x80] = { 0 };
 	
 	/* set buffername */
 	strcpy(bufferName, "Unkown");
@@ -1438,4 +1449,69 @@ VFAPI int vfGetBuffer(void* buffer, int size, int type)
 	/* write to user buffer */
 	memcpy(buffer, pbuff, size);
 	return 1;
+}
+
+VFAPI int vfGetBufferField(void* field, int size, int type)
+{
+	/* bad size check */
+	if (size < 0) return 0;
+
+	/* select buffer to read from */
+	unsigned char* pbuff;
+	switch (type)
+	{
+	case VF_BUFF_TRANSFORM:
+		pbuff = _tBufferField;
+		break;
+
+	case VF_BUFF_BOUND:
+		pbuff = _bBufferField;
+		break;
+
+	case VF_BUFF_PARTICLE:
+		pbuff = _pBufferField;
+		break;
+
+	case VF_BUFF_ENTITY:
+		pbuff = _eBufferField;
+		break;
+
+		/* fail condition */
+	default:
+		return 0;
+		break;
+	}
+
+	/* write to user buffer */
+	memcpy(field, pbuff, size);
+	return 1;
+}
+
+VFAPI int vfGetObjectCount(int type)
+{
+	int count = -1;
+
+	switch (type)
+	{
+	case VF_OBJ_TRANSFORM:
+		count = _tCount;
+		break;
+
+	case VF_OBJ_BOUND:
+		count = _bCount;
+		break;
+
+	case VF_OBJ_PARTICLE:
+		count = _pCount;
+		break;
+
+	case VF_OBJ_ENTITY:
+		count = _eCount;
+		break;
+
+	default:
+		break;
+	}
+
+	return count;
 }

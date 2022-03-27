@@ -193,5 +193,7 @@ VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
+VFAPI int vfGetBufferField(void* field, int size, int type);
+VFAPI int vfGetObjectCount(int type);
 
 #endif 
