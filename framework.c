@@ -18,6 +18,7 @@
 *		- Struct related functions
 *		- Rendering functions
 *		- Physics functions
+*		- Data functions
 *
 ******************************************************************************/
 
@@ -49,6 +50,10 @@ static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 
 /* internal buffers */
+
+/* BIG AUXILLARY BUFFER */
+static BYTE _mTank[VF_MEMTANK_SIZE + VF_MEMTANK_EXCESS];
+static BYTE _mTField[VF_MEMTANK_SIZE / 8];
 
 /* TRANSFORM RELATED DATA */
 static vfTransform* _tBuffer; static field* _tBufferField;
@@ -186,22 +191,33 @@ static inline int findBufferSpot(void* buffer, field* field,
 	if (buffer == NULL || field == NULL)
 	{
 		/* CRITICAL ENGINE FAILURE! */
-		MessageBoxA(NULL, "CRITICAL ENGINE FAILURE!",
-			"Engine Not Initialized Properly!", MB_OK);
+		MessageBoxA(NULL, "Engine Not Initialized Properly!",
+			"CRITICAL ENGINE FAILURE!", MB_OK);
 		exit(1);
 	}
 
+	/* get buffer size */
+	int bufSize = 0;
+	if (buffer == _tBuffer) bufSize = _tCount;
+	if (buffer == _bBuffer) bufSize = _bCount;
+	if (buffer == _pBuffer) bufSize = _pCount;
+	if (buffer == _eBuffer) bufSize = _eCount;
+
+
 	/* find empty spot within field */
-	int i;
-	for (i = 0; i < VF_BUFFER_SIZE; i++)
+	int startIndex = bufSize / 2;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
+		/* calculate searchIndex */
+		int searchIndex = (startIndex + i) % VF_BUFFER_SIZE;
+
 		/* empty spot */
-		if ((field)[i] == 0) return i;
+		if ((field)[searchIndex] == 0) return i;
 	}
 
 	/* CRITICAL ENGINE FAILURE: */
 	char bufferName[0x20] = { 0 };
-	char errMsg[0xFF] = { 0 };
+	char errMsg[0x80] = { 0 };
 	
 	/* set buffername */
 	strcpy(bufferName, "Unkown");
@@ -212,8 +228,8 @@ static inline int findBufferSpot(void* buffer, field* field,
 
 	/* messagebox failure and exit */
 	sprintf(errMsg, "%s Buffer Full!", bufferName);
-	MessageBoxExA(NULL, "CRITICAL ENGINE FAILURE",
-		errMsg, MB_OK, 0);
+	MessageBoxExA(NULL, errMsg,
+		"CRITICAL ENGINE FAILURE", MB_OK, 0);
 	exit(1);
 }
 
@@ -1400,4 +1416,180 @@ VFAPI void vfSetPhysicsState(int value)
 VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback)
 {
 	entity->collisionCallback = callback;
+}
+
+/* DATA RELATED FUNCTIONS */
+VFAPI int vfGetBuffer(void* buffer, int size, int type)
+{
+	/* bad size check */
+	if (size < 0) return 0;
+
+	/* select buffer to read from */
+	unsigned char* pbuff;
+	switch (type)
+	{
+	case VF_BUFF_TRANSFORM:
+		pbuff = _tBuffer;
+		break;
+
+	case VF_BUFF_BOUND:
+		pbuff = _bBuffer;
+		break;
+
+	case VF_BUFF_PARTICLE:
+		pbuff = _pBuffer;
+		break;
+
+	case VF_BUFF_ENTITY:
+		pbuff = _eBuffer;
+		break;
+	
+	/* fail condition */
+	default:
+		return 0;
+		break;
+	}
+
+	/* write to user buffer */
+	memcpy(buffer, pbuff, size);
+	return 1;
+}
+
+VFAPI int vfGetBufferField(void* field, int size, int type)
+{
+	/* bad size check */
+	if (size < 0) return 0;
+
+	/* select buffer to read from */
+	unsigned char* pbuff;
+	switch (type)
+	{
+	case VF_BUFF_TRANSFORM:
+		pbuff = _tBufferField;
+		break;
+
+	case VF_BUFF_BOUND:
+		pbuff = _bBufferField;
+		break;
+
+	case VF_BUFF_PARTICLE:
+		pbuff = _pBufferField;
+		break;
+
+	case VF_BUFF_ENTITY:
+		pbuff = _eBufferField;
+		break;
+
+		/* fail condition */
+	default:
+		return 0;
+		break;
+	}
+
+	/* write to user buffer */
+	memcpy(field, pbuff, size);
+	return 1;
+}
+
+VFAPI int vfGetObjectCount(int type)
+{
+	int count = -1;
+
+	switch (type)
+	{
+	case VF_OBJ_TRANSFORM:
+		count = _tCount;
+		break;
+
+	case VF_OBJ_BOUND:
+		count = _bCount;
+		break;
+
+	case VF_OBJ_PARTICLE:
+		count = _pCount;
+		break;
+
+	case VF_OBJ_ENTITY:
+		count = _eCount;
+		break;
+
+	default:
+		break;
+	}
+
+	return count;
+}
+
+/* ALLOCATING AND FREEING FUNCTION */
+static int ensureFreeMTBlock(int startIndex, int size)
+{
+	for (int i = 0; i < size; i++)
+	{
+		/* check for contig, if !, ret 0 */
+		if (_mTField[startIndex + i] == 1) return 0;
+	}
+	return 1;
+}
+static int findFreeMTIndex(int size)
+{
+	for (int i = 0; i < VF_MEMTANK_SIZE / 8; i++)
+	{
+		/* on find free spot, ret index */
+		if (_mTField[i] == 0 && ensureFreeMTBlock(i, size))
+			return i;
+	}
+
+	/* on fail, ret -1 */
+	return -1;
+}
+
+VFAPI void* vfMTAlloc(int size, int zero)
+{
+	/* bad size condition */
+	if (size < 0 || size / 8 > VF_BUFFER_SIZE) return NULL;
+
+	/* find lowest multiple of 8 which satisfies size */
+	float fsize = (float)size;
+	int sizeActual = (int)ceilf(fsize / 8);
+
+	/* check for the impossible */
+	if (sizeActual * 8 < size) sizeActual++;
+
+	/* find index */
+	int index = findFreeMTIndex(sizeActual);
+
+	/* fail condition */
+	if (index == -1) return NULL;
+
+	/* fill field */
+	for (int i = 0; i < sizeActual; i++)
+		_mTField[index + i] = 1;
+
+	/* check zero and return ptr */
+	if (zero) ZeroMemory(_mTank + index, sizeActual * 8);
+	return _mTank + index;
+}
+
+VFAPI int vfMTFree(void* ptr, int size, int zero)
+{
+	/* check for bad ptr */
+	if (ptr == NULL || ptr < _mTank ||
+		ptr > _mTank + (VF_MEMTANK_SIZE / 8)) return 0;
+
+	/* find lowest multiple of 8 which satisfies size */
+	float fsize = (float)size;
+	int sizeActual = (int)ceilf(fsize / 8);
+
+	/* check for the impossible */
+	if (sizeActual * 8 < size) sizeActual++;
+
+	/* free field */
+	int startIndex = ((char*)ptr - _mTank) / 8;
+	for (int i = 0; i < sizeActual; i++)
+		_mTField[startIndex + i] = 0;
+
+	/* zero */
+	if (zero) ZeroMemory(ptr, sizeActual * 8);
+
+	return 1;
 }
