@@ -398,8 +398,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 	if (!target->staticData.active) return 0;
 
 	/* if the two average positions are very similar, move one over */
-	if (abs(source->average.x - target->average.x) < VF_POSITION_SIMILARITY
-		|| abs(source->average.y - target->average.y) <
+	if (fabsf(source->average.x - target->average.x) < VF_POSITION_SIMILARITY
+		|| fabsf(source->average.y - target->average.y) <
 		VF_POSITION_SIMILARITY)
 	{
 		source->average.x += VF_POSITION_SIMILARITY;
@@ -855,7 +855,7 @@ static DWORD WINAPI vfMain(void* params)
 		int mutStatus = WaitForSingleObject(_mutex, VF_MUTEX_TIMEOUT_INTERVAL);
 		if (mutStatus != WAIT_OBJECT_0)
 		{
-			wchar_t errBuff[512];
+			char errBuff[0x200];
 
 			/* for every bound there is a boundQuad */
 			int bMemSize = (sizeof(vfBound) + sizeof(boundQuad)) *
@@ -865,19 +865,19 @@ static DWORD WINAPI vfMain(void* params)
 			int eMemSize = sizeof(vfEntity) * VF_BUFFER_SIZE;
 
 			/* err log */
-			swprintf(errBuff, 512, L"Error Code: %d\nBounds Used/Allocated: %d/%d\n"
-				L"Transforms Used/Allocated: %d/%d\nEntities Used/Allocated: %d/%d\n"
-				L"Bytes allocated for Bounds: %d\n"
-				L"Bytes allocated for Transforms: %d\n"
-				L"Bytes allocated for Entities: %d\n", GetLastError(),
+			sprintf(errBuff, "Error Code: %d\nBounds Used/Allocated: %d/%d\n"
+				"Transforms Used/Allocated: %d/%d\nEntities Used/Allocated: %d/%d\n"
+				"Bytes allocated for Bounds: %d\n"
+				"Bytes allocated for Transforms: %d\n"
+				"Bytes allocated for Entities: %d\n", GetLastError(),
 				_bCount, VF_BUFFER_SIZE, _tCount, VF_BUFFER_SIZE,
 				_eCount, VF_BUFFER_SIZE, bMemSize,
 				tMemSize, eMemSize);
 
 			/* send messageboxes */
-			MessageBox(NULL, L"[vfMain] Thread timewout in VFramework.dll",
-				L"FATAL ERROR", MB_OK);
-			MessageBox(NULL, errBuff, L"ERROR INFO", MB_OK);
+			MessageBoxA(NULL, "[vfMain] Thread timewout in VFramework.dll",
+				"FATAL ERROR", MB_OK);
+			MessageBoxA(NULL, errBuff, "ERROR INFO", MB_OK);
 			exit(1);
 		}
 
@@ -918,10 +918,10 @@ static DWORD WINAPI vfMain(void* params)
 		/* RELEASE BUFFER OWNERSHIP */
 		if (!ReleaseMutex(_mutex))
 		{
-			wchar_t errBuffer[255];
-			swprintf(errBuffer, 255, L"[vfmain] Mutex relase failed! Err code: %d",
+			char errBuffer[0xFF];
+			sprintf(errBuffer, "[vfmain] Mutex relase failed! Err code: %d",
 				GetLastError());
-			MessageBox(NULL, errBuffer, L"FATAL ERROR", MB_OK);
+			MessageBoxA(NULL, errBuffer, "FATAL ERROR", MB_OK);
 			exit(1);
 		}
 
@@ -953,8 +953,8 @@ VFAPI void vfInit(void)
 	_mutex = CreateMutex(NULL, FALSE, NULL);
 	if (_mutex == NULL)
 	{
-		MessageBox(NULL, L"Failed to create thread mutex object",
-			L"FATAL ERR", MB_OK);
+		MessageBoxA(NULL, "Failed to create thread mutex object",
+			"FATAL ERR", MB_OK);
 		exit(1);
 	}
 
@@ -1508,19 +1508,19 @@ VFAPI int vfGetBuffer(void* buffer, int size, int type)
 	switch (type)
 	{
 	case VF_BUFF_TRANSFORM:
-		pbuff = _tBuffer;
+		pbuff = (BYTE*)_tBuffer;
 		break;
 
 	case VF_BUFF_BOUND:
-		pbuff = _bBuffer;
+		pbuff = (BYTE*)_bBuffer;
 		break;
 
 	case VF_BUFF_PARTICLE:
-		pbuff = _pBuffer;
+		pbuff = (BYTE*)_pBuffer;
 		break;
 
 	case VF_BUFF_ENTITY:
-		pbuff = _eBuffer;
+		pbuff = (BYTE*)_eBuffer;
 		break;
 	
 	/* fail condition */
@@ -1654,8 +1654,7 @@ VFAPI void* vfMTAlloc(int size, int zero)
 VFAPI int vfMTFree(void* ptr, int size, int zero)
 {
 	/* check for bad ptr */
-	if (ptr == NULL || ptr < _mTank ||
-		ptr > _mTank + (VF_MEMTANK_FIELDSIZE)) return 0;
+	if (ptr == NULL) return 0;
 
 	/* find lowest multiple of 8 which satisfies size */
 	float fsize = (float)size;
