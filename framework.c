@@ -72,6 +72,11 @@ static int _bCount;
 static vfEntity* _eBuffer; static field* _eBufferField;
 static int _eCount;
 
+/* STATIC CALLBACK DATA */
+static STATUPDCALLBACK _sCallBuff[VF_STATICCALLBACK_MAX];
+static int _sCallSize;
+static long long _tickCount = 0;
+
 /* boundQuad struct definition */
 typedef struct boundQuad
 {
@@ -892,6 +897,14 @@ static DWORD WINAPI vfMain(void* params)
 
 			/* handle velocity changes from collisions */
 			updateCollisionVelocities();
+
+			/* call all callbacks */
+			for (int i = 0; i < VF_STATICCALLBACK_MAX; i++)
+			{
+				if (_sCallBuff[i] == NULL) continue;
+				STATUPDCALLBACK callBck = _sCallBuff[i];
+				callBck(_tickCount);
+			}
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
@@ -903,14 +916,22 @@ static DWORD WINAPI vfMain(void* params)
 			MessageBox(NULL, errBuffer, L"FATAL ERROR", MB_OK);
 			exit(1);
 		}
+
+		/* increment tick count */
+		_tickCount++;
 	}
 }
 
 /* INIT AND TERMINATE FUNCTIONS */
 VFAPI void vfInit(void)
 {
-	/* ger process heap */
+	/* get process heap */
 	_heap = GetProcessHeap();
+
+	/* clear callback and callback size */
+	ZeroMemory(_sCallBuff, sizeof(_sCallBuff));
+	_sCallSize = 0;
+	_tickCount = 0;
 
 	/* init module internal data */
 	_sleepTime = 0;
@@ -1440,6 +1461,34 @@ VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback)
 	entity->updateCallback = callback;
 }
 
+VFAPI int vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
+	int priorityRequest)
+{
+	/* check for callback full */
+	if (_sCallSize == VF_STATICCALLBACK_MAX) return -1;
+
+	/* check if callback priority is free */
+	if (_sCallBuff[priorityRequest] == NULL)
+	{
+		_sCallBuff[priorityRequest] = callback;
+		return priorityRequest;
+	}
+
+	/* if reached here, priority is not free */
+	/* look for free spot */
+	for (int i = priorityRequest; i < VF_STATICCALLBACK_MAX; i++)
+	{
+		if (_sCallBuff[i] == NULL)
+		{
+			_sCallBuff[i] = callback;
+			return i;
+		}
+	}
+
+	/* if reached here, no free spot :( */
+	return -1;
+}
+
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type)
 {
@@ -1554,7 +1603,7 @@ static int ensureFreeMTBlock(int startIndex, int size)
 }
 static int findFreeMTIndex(int size)
 {
-	for (int i = 0; i < VF_MEMTANK_SIZE / 8; i++)
+	for (int i = 0; i < VF_MEMTANK_FIELDSIZE; i++)
 	{
 		/* on find free spot, ret index */
 		if (_mTField[i] == 0 && ensureFreeMTBlock(i, size))
