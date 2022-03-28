@@ -899,11 +899,19 @@ static DWORD WINAPI vfMain(void* params)
 			updateCollisionVelocities();
 
 			/* call all callbacks */
+			int callCount = 0;
 			for (int i = 0; i < VF_STATICCALLBACK_MAX; i++)
 			{
+				/* if null, continue */
 				if (_sCallBuff[i] == NULL) continue;
+
+				/* get callback and invoke */
 				STATUPDCALLBACK callBck = _sCallBuff[i];
 				callBck(_tickCount);
+
+				/* increment callcount and exit if done */
+				callCount++;
+				if (callCount >= _sCallSize) break;
 			}
 		}
 
