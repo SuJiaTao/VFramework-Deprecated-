@@ -965,7 +965,7 @@ VFAPI void vfInit(void)
 	_eCount = 0;
 
 	/* init mutexs */
-	_mutex = CreateMutex(NULL, FALSE, NULL);
+	_mutex = CreateMutexW(NULL, FALSE, NULL);
 	_killMutex = CreateMutexW(NULL, FALSE, NULL);
 	if (_mutex == NULL)
 	{
@@ -1038,6 +1038,7 @@ VFAPI void vfTerminate(void)
 	HeapFree(_heap, 0, _eBufferField);
 
 	/* close handles */
+	CloseHandle(_heap);
 	CloseHandle(_mutex);
 	CloseHandle(_killMutex);
 }
