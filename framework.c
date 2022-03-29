@@ -46,6 +46,7 @@ typedef unsigned char field;
 static HANDLE _fThread; /* thread handle */
 static HANDLE _heap; /* heap handle */
 static HANDLE _mutex; /* buffer use mutex */
+static HANDLE _killMutex; /* kill mutex */
 static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 static int _killSignal;   /* thread kill signal */
@@ -836,6 +837,10 @@ static inline void updateCollisionVelocities(void)
 static DWORD WINAPI vfMain(void* params)
 {
 	ULONGLONG lastTime = 0;
+	
+	/* get ahold of kill mutex */
+	int result = WaitForSingleObject(_killMutex, NULL);
+
 	while (TRUE)
 	{
 		/* sleep (optional) */
@@ -934,6 +939,7 @@ static DWORD WINAPI vfMain(void* params)
 		if (_killSignal)
 		{
 			_killRecieved = TRUE;
+			ReleaseMutex(_killMutex);
 			ExitThread(0);
 		}
 	}
@@ -958,8 +964,9 @@ VFAPI void vfInit(void)
 	_pCount = 0;
 	_eCount = 0;
 
-	/* init mutex */
+	/* init mutexs */
 	_mutex = CreateMutex(NULL, FALSE, NULL);
+	_killMutex = CreateMutexW(NULL, FALSE, NULL);
 	if (_mutex == NULL)
 	{
 		MessageBoxA(NULL, "Failed to create thread mutex object",
@@ -1007,9 +1014,14 @@ VFAPI void vfInit(void)
 
 VFAPI void vfTerminate(void)
 {
-	/* kill daemon thread */
+	/* send kill signal */
 	_killSignal = TRUE;
-	while (!_killRecieved);
+
+	/* wait until signal is recieved */
+	while (_killRecieved == FALSE);
+
+	/* wait for kill mutex */
+	WaitForSingleObject(_killMutex, 0xFF);
 
 	/* free all buffers */
 	HeapFree(_heap, 0, _tBuffer);
@@ -1024,6 +1036,10 @@ VFAPI void vfTerminate(void)
 	HeapFree(_heap, 0, _bBufferField);
 	HeapFree(_heap, 0, _pBufferField);
 	HeapFree(_heap, 0, _eBufferField);
+
+	/* close handles */
+	CloseHandle(_mutex);
+	CloseHandle(_killMutex);
 }
 
 /* THREADING RELATED FUNCTIONS */
