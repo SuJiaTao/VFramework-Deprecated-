@@ -967,7 +967,7 @@ VFAPI void vfInit(void)
 	/* init mutexs */
 	_mutex = CreateMutexW(NULL, FALSE, NULL);
 	_killMutex = CreateMutexW(NULL, FALSE, NULL);
-	if (_mutex == NULL)
+	if (_mutex == NULL || _killMutex == NULL)
 	{
 		MessageBoxA(NULL, "Failed to create thread mutex object",
 			"FATAL ERR", MB_OK);
@@ -1038,7 +1038,6 @@ VFAPI void vfTerminate(void)
 	HeapFree(_heap, 0, _eBufferField);
 
 	/* close handles */
-	CloseHandle(_heap);
 	CloseHandle(_mutex);
 	CloseHandle(_killMutex);
 }
@@ -1388,6 +1387,10 @@ VFAPI void vfRenderParticles(void)
 
 		/* get FINAL transform */
 		vfTransform* rTransform = render.transform;
+
+		/* null check */
+		if (rTransform == NULL) continue;
+
 		int tIndex = rTransform - _tBuffer;
 		vfTransform tFinal = _tFinalBuffer[tIndex];
 
@@ -1418,8 +1421,15 @@ VFAPI void vfRenderEntities(void)
 		vfEntity renderEnt = _eBuffer[i];
 		if (!renderEnt.active) continue;
 
-		/* grab the FINAL transform of the entity */
-		vfTransform tFinal = *renderEnt.transform;
+		/* grab the current transform of the entity */
+		vfTransform* tTemp = renderEnt.transform;
+
+		/* null check */
+		if (tTemp == NULL) continue;
+
+		/* grab the final transform of the entity */
+		int tIndex = tTemp - _tBuffer;
+		vfTransform tFinal = _tFinalBuffer[tIndex];
 
 		/* render */
 		vgRenderLayer(renderEnt.layer);
