@@ -48,6 +48,8 @@ static HANDLE _heap; /* heap handle */
 static HANDLE _mutex; /* buffer use mutex */
 static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
+static int _killSignal;   /* thread kill signal */
+static int _killRecieved; /* kill recieved signal */
 
 /* internal buffers */
 
@@ -927,6 +929,13 @@ static DWORD WINAPI vfMain(void* params)
 
 		/* increment tick count */
 		_tickCount++;
+
+		/* check for kill signal */
+		if (_killSignal)
+		{
+			_killRecieved = TRUE;
+			ExitThread(0);
+		}
 	}
 }
 
@@ -991,12 +1000,30 @@ VFAPI void vfInit(void)
 		sizeof(field) * VF_BUFFER_SIZE);
 
 	/* init module main thread */
+	_killSignal   = FALSE;
+	_killRecieved = FALSE;
 	_fThread = CreateThread(0, 0, vfMain, 0, 0, &_fThread);
 }
 
 VFAPI void vfTerminate(void)
 {
-	TerminateThread(_fThread, 1);
+	/* kill daemon thread */
+	_killSignal = TRUE;
+	while (!_killRecieved);
+
+	/* free all buffers */
+	HeapFree(_heap, 0, _tBuffer);
+	HeapFree(_heap, 0, _bBuffer);
+	HeapFree(_heap, 0, _pBuffer);
+	HeapFree(_heap, 0, _eBuffer);
+	HeapFree(_heap, 0, _bqBuffer);
+	HeapFree(_heap, 0, _tFinalBuffer);
+
+	/* free all buffer fields */
+	HeapFree(_heap, 0, _tBufferField);
+	HeapFree(_heap, 0, _bBufferField);
+	HeapFree(_heap, 0, _pBufferField);
+	HeapFree(_heap, 0, _eBufferField);
 }
 
 /* THREADING RELATED FUNCTIONS */
@@ -1609,6 +1636,7 @@ static int ensureFreeMTBlock(int startIndex, int size)
 	}
 	return 1;
 }
+
 static int findFreeMTIndex(int size)
 {
 	for (int i = 0; i < VF_MEMTANK_FIELDSIZE; i++)
