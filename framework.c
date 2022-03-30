@@ -45,8 +45,9 @@ typedef unsigned char field;
 
 static HANDLE _fThread; /* thread handle */
 static HANDLE _heap; /* heap handle */
-static HANDLE _mutex; /* buffer use mutex */
-static HANDLE _killMutex; /* kill mutex */
+static HANDLE _writeMutex; /* buffer use mutex */
+static HANDLE _drawMutex;  /* draw mutex */
+static HANDLE _killMutex;  /* kill mutex */
 static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 static int _killSignal;   /* thread kill signal */
@@ -859,7 +860,7 @@ static DWORD WINAPI vfMain(void* params)
 		}
 
 		/* WAIT FOR BUFFER OWNERSHIP */
-		int mutStatus = WaitForSingleObject(_mutex, VF_MUTEX_TIMEOUT_INTERVAL);
+		int mutStatus = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
 		if (mutStatus != WAIT_OBJECT_0)
 		{
 			char errBuff[0x200];
@@ -923,7 +924,7 @@ static DWORD WINAPI vfMain(void* params)
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
-		if (!ReleaseMutex(_mutex))
+		if (!ReleaseMutex(_writeMutex))
 		{
 			char errBuffer[0xFF];
 			sprintf(errBuffer, "[vfmain] Mutex relase failed! Err code: %d",
@@ -965,9 +966,11 @@ VFAPI void vfInit(void)
 	_eCount = 0;
 
 	/* init mutexs */
-	_mutex = CreateMutexW(NULL, FALSE, NULL);
-	_killMutex = CreateMutexW(NULL, FALSE, NULL);
-	if (_mutex == NULL || _killMutex == NULL)
+	_writeMutex = CreateMutexW(NULL, FALSE, NULL);
+	_killMutex  = CreateMutexW(NULL, FALSE, NULL);
+	_drawMutex  = CreateMutexW(NULL, FALSE, NULL);
+	if (_writeMutex == NULL || _killMutex == NULL
+		|| _writeMutex == NULL)
 	{
 		MessageBoxA(NULL, "Failed to create thread mutex object",
 			"FATAL ERR", MB_OK);
@@ -1038,7 +1041,7 @@ VFAPI void vfTerminate(void)
 	HeapFree(_heap, 0, _eBufferField);
 
 	/* close handles */
-	CloseHandle(_mutex);
+	CloseHandle(_writeMutex);
 	CloseHandle(_killMutex);
 }
 
@@ -1048,8 +1051,38 @@ VFAPI void vfThreadSleepTime(unsigned int miliseconds)
 	_sleepTime = miliseconds;
 }
 
-/* STRUCT CREATION FUNCTIONS */
+/* STRUCT CREATION HELPER FUNCTIONS */
+static void showMutexError(const char* mName, const char* description)
+{
+	char cBuff[0xFF] = { 0 };
+	sprintf(cBuff, "Could not create new object!\n"
+		"Process is stuck!\nMUTEX:%s\nDESC:%s\n", mName,
+		description);
 
+	MessageBoxA(NULL, cBuff, "FATAL ENGINE ERROR",
+		MB_OK);
+	exit(1);
+}
+
+static inline void captureMutex(const char* errMsg)
+{
+	/* get write and draw mutex*/
+	int result;
+	result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("WriteMutex", errMsg);
+	result = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("DrawMutex", errMsg);
+	return;
+}
+
+static inline void releaseMutex(void)
+{
+	/* release draw and write mutex */
+	ReleaseMutex(_drawMutex);
+	ReleaseMutex(_writeMutex);
+}
+
+/* STRUCT CREATION FUNCTIONS */
 VFAPI vfVector vfCreateVector(float x, float y)
 {
 	vfVector rVec;
@@ -1069,6 +1102,7 @@ VFAPI vfColor vfCreateColor(int r, int g, int b, int a)
 
 VFAPI vfTransform* vfCreateTransformv(vfVector vector)
 {
+
 	/* find transform buffer spot */
 	int tIndex = findBufferSpot(_tBuffer, _tBufferField,
 		sizeof(vfTransform));
@@ -1088,6 +1122,7 @@ VFAPI vfTransform* vfCreateTransformv(vfVector vector)
 VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
 	float scale)
 {
+
 	/* find transform buffer spot */
 	int tIndex = findBufferSpot(_tBuffer, _tBufferField,
 		sizeof(vfTransform));
@@ -1106,6 +1141,7 @@ VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
 
 VFAPI vfTransform* vfCreateTransformp(vfTransform* parent)
 {
+
 	/* find transform buffer spot */
 	int tIndex = findBufferSpot(_tBuffer, _tBufferField,
 		sizeof(vfTransform));
@@ -1121,6 +1157,7 @@ VFAPI vfTransform* vfCreateTransformp(vfTransform* parent)
 
 VFAPI vfBound* vfCreateBoundt(vfTransform* body)
 {
+
 	/* find bound buffer spot */
 	int bIndex = findBufferSpot(_bBuffer, _bBufferField,
 		sizeof(vfBound));
@@ -1139,6 +1176,7 @@ VFAPI vfBound* vfCreateBoundt(vfTransform* body)
 VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 	vfVector dimensions)
 {
+
 	/* find bound buffer spot */
 	int bIndex = findBufferSpot(_bBuffer, _bBufferField,
 		sizeof(vfBound));
@@ -1159,6 +1197,8 @@ VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 
 VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
 {
+	captureMutex("Particle Creation Timeout");
+
 	/* get free spot */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField,
 		sizeof(vfParticle));
@@ -1172,12 +1212,15 @@ VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
 	rParticle->filter = vfCreateColor(255, 255, 255, 255);
 	rParticle->transform = transform;
 
+	releaseMutex( );
 	return rParticle;
 }
 
 VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 	vgShape shape, unsigned char layer)
 {
+	captureMutex("Particle creation timeout");
+
 	/* get free spot */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField,
 		sizeof(vfParticle));
@@ -1192,6 +1235,7 @@ VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 	rParticle->shape = shape;
 	rParticle->transform = transform;
 
+	releaseMutex( );
 	return rParticle;
 }
 
@@ -1230,6 +1274,8 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	vgTexture texture, vfPhysics physics, vfVector boundPosition,
 	vfVector boundDimensions)
 {
+	captureMutex("Entity creation timeout");
+
 	/* find free spot */
 	int eIndex = findBufferSpot(_eBuffer, _eBufferField,
 		sizeof(vfEntity));
@@ -1239,6 +1285,7 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	/* get return entity and init values */
 	vfEntity* rEnt = _eBuffer + eIndex;
 	rEnt->active = TRUE;
+
 	rEnt->transform = vfCreateTransforma(vfCreateVector(0, 0), 0, 1);
 	rEnt->bounds = vfCreateBounda(rEnt->transform, boundPosition,
 		boundDimensions);
@@ -1250,7 +1297,8 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	vfBound* entBounds = rEnt->bounds;
 	entBounds->entity = rEnt;
 	rEnt->collisionCallback = NULL;
-	
+
+	releaseMutex( );
 	return rEnt;
 }
 
@@ -1286,6 +1334,8 @@ VFAPI void vfDestroyBound(vfBound* bound, int zero)
 
 VFAPI void vfDestroyParticle(vfParticle* particle, int zero)
 {
+	captureMutex("Particle Destruction Timeout");
+
 	/* get index and update buffer field */
 	int index = particle - _pBuffer;
 	_pBufferField[index] = 0;
@@ -1296,10 +1346,14 @@ VFAPI void vfDestroyParticle(vfParticle* particle, int zero)
 	{
 		ZeroMemory(particle, sizeof(vfParticle));
 	}
+
+	releaseMutex();
 }
 
 VFAPI void vfDestroyEntity(vfEntity* entity, int zero)
 {
+	captureMutex("Entity destruction timeout");
+
 	/* get index and update buffer field */
 	int index = entity - _eBuffer;
 	_eBufferField[index] = 0;
@@ -1314,6 +1368,8 @@ VFAPI void vfDestroyEntity(vfEntity* entity, int zero)
 	{
 		ZeroMemory(entity, sizeof(vfEntity));
 	}
+
+	releaseMutex();
 }
 
 /* STRUCT RELATED FUNCTIONS */
@@ -1375,11 +1431,16 @@ VFAPI void* vfGetObject(vfHandle handle, int type)
 
 VFAPI void vfRenderParticles(void)
 {
+	/* get render permission */
+	int mResult = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
+	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
+		"Particle render timout");
+
 	int rendered = 0;
 
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
-		if (rendered >= _pCount) return;
+		if (rendered >= _pCount) break;
 		if (!_pBufferField[i]) continue;
 
 		vfParticle render = _pBuffer[i];
@@ -1407,15 +1468,23 @@ VFAPI void vfRenderParticles(void)
 		/* increment render count */
 		rendered++;
 	}
+
+	/* release mutex */
+	ReleaseMutex(_drawMutex);
 }
 
 VFAPI void vfRenderEntities(void)
 {
+	/* get render permission */
+	int mResult = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
+	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
+		"Entity render timeout");
+
 	int eRendered = 0;
 
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
-		if (eRendered >= _eCount) return;
+		if (eRendered >= _eCount) break;
 		if (_eBufferField[i] == 0) continue;
 
 		vfEntity renderEnt = _eBuffer[i];
@@ -1423,9 +1492,6 @@ VFAPI void vfRenderEntities(void)
 
 		/* grab the current transform of the entity */
 		vfTransform* tTemp = renderEnt.transform;
-
-		/* null check */
-		if (tTemp == NULL) continue;
 
 		/* grab the final transform of the entity */
 		int tIndex = tTemp - _tBuffer;
@@ -1445,6 +1511,9 @@ VFAPI void vfRenderEntities(void)
 		/* increment render count */
 		eRendered++;
 	}
+
+	/* release mutex */
+	ReleaseMutex(_drawMutex);
 }
 
 VFAPI void vfRenderBounds(void)
