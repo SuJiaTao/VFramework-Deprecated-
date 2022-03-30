@@ -1431,6 +1431,9 @@ VFAPI void* vfGetObject(vfHandle handle, int type)
 
 VFAPI void vfRenderParticles(void)
 {
+	/* check for render skip */
+	if (vgGetRenderSkipState()) return;
+
 	/* get render permission */
 	int mResult = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
@@ -1475,6 +1478,9 @@ VFAPI void vfRenderParticles(void)
 
 VFAPI void vfRenderEntities(void)
 {
+	/* check for render skip */
+	if (vgGetRenderSkipState()) return;
+
 	/* get render permission */
 	int mResult = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
@@ -1518,6 +1524,9 @@ VFAPI void vfRenderEntities(void)
 
 VFAPI void vfRenderBounds(void)
 {
+	/* check for framskip */
+	if (vgGetRenderSkipState()) return;
+
 	/* render bound */
 	vgLineSize(2.5f);
 	int bRendered = 0;
