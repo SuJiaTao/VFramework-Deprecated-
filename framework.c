@@ -114,23 +114,38 @@ static boundQuad* _bqBuffer;
 /* SPACE PARTITION BUFFERS */
 typedef struct partition
 {
-	int used : 1; /* use flag (not 1 bit) */
-	int x; /* partition x */
-	int y; /* partition y */
-	int bqCount;
-	int bqIndexes[VF_PARTITION_SIZE];
+	INT16  x; /* partition x */
+	INT16  y; /* partition y */
+	INT8   bqCount;
+	INT16* bqIndexes; /* dynamic array */
 } partition;
 
 static partition _partBuff[VF_PARTITION_COUNT];
 static int _partitionCount = 0;
 static int _partitionSize = 2000;
 
-/* PARTITION CLEAR FUNCTION */
-static inline void clearPartition(partition* part)
+/* SPECALLOC/FREE */
+static void* specAlloc(int size)
 {
-	ZeroMemory(part, sizeof(partition));
+	void* memLoc = vfMTAlloc(size, FALSE);
+	/* check mtalloc fail */
+	if (!memLoc)
+	{
+		memLoc = HeapAlloc(_heap, NULL, size);
+	}
+	return memLoc;
 }
-
+static int specFree(void* ptr, int size)
+{
+	int fCheck = vfMTFree(ptr, size, FALSE);
+	/* on !fcheck, malloc was used */
+	if (!fCheck)
+	{
+		HeapFree(_heap, NULL, ptr);
+		return TRUE;
+	}
+	return FALSE;
+}
 /* PARTCHECK */
 static inline int partCheck(boundQuad* bq, int rangeMax,
 	int* partCount, int* partX, int* partY)
@@ -172,7 +187,14 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 /* ADD TO PARTITION */
 static inline void addToPartition(boundQuad* bq, int x, int y)
 {
-	
+	/* check for existing partition */
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		/* check for collision */
+		if (_partBuff[i].x == x && _partBuff[i].y == y)
+		{
+		}
+	}
 }
 
 /* ASSIGN PARTITION */
@@ -1859,8 +1881,14 @@ VFAPI void* vfMTAlloc(int size, int zero)
 
 VFAPI int vfMTFree(void* ptr, int size, int zero)
 {
+	/* cast ptr */
+	BYTE* cPtr = ptr;
+
 	/* check for bad ptr */
-	if (ptr == NULL) return 0;
+	if (cPtr == NULL) return 0;
+
+	/* check more for bad ptr */
+	if (cPtr < _mTank || cPtr > _mTank + VF_MEMTANK_SIZE) return 0;
 
 	/* find lowest multiple of 8 which satisfies size */
 	float fsize = (float)size;
