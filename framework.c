@@ -114,6 +114,7 @@ static boundQuad* _bqBuffer;
 /* SPACE PARTITION BUFFERS */
 typedef struct partition
 {
+	int used : 1; /* use flag (not 1 bit) */
 	int x; /* partition x */
 	int y; /* partition y */
 	int bqCount;
@@ -121,11 +122,67 @@ typedef struct partition
 } partition;
 
 static partition _partBuff[VF_PARTITION_COUNT];
+static int _partitionCount = 0;
+static int _partitionSize = 2000;
 
 /* PARTITION CLEAR FUNCTION */
-static void clearPartition(partition* part)
+static inline void clearPartition(partition* part)
 {
 	ZeroMemory(part, sizeof(partition));
+}
+
+/* PARTCHECK */
+static inline int partCheck(boundQuad* bq, int rangeMax,
+	int* partCount, int* partX, int* partY)
+{
+	/* for each vert, get it's partition coordinate */
+	int pBuff[0x4][2];
+	for (int i = 0; i < 0x4; i++)
+	{
+		pBuff[i][0] = (int)(bq->verts[i].x / _partitionSize);
+		pBuff[i][1] = (int)(bq->verts[i].y / _partitionSize);
+	}
+
+	/* create bounding box around boundQuad */
+	int minPartX = pBuff[0][0], maxPartX = pBuff[0][0];
+	int minPartY = pBuff[0][1], maxPartY = pBuff[0][1];
+
+	/* loop to find min/max */
+	for (int i = 0; i < 0x4; i++)
+	{
+		minPartX = min(minPartX, pBuff[i][0]);
+		maxPartX = max(maxPartX, pBuff[i][0]);
+		minPartY = min(minPartY, pBuff[i][1]);
+		maxPartY = max(maxPartY, pBuff[i][1]);
+	}
+
+	/* get all partIndexes between the given parts */
+	int range = maxPartX - minPartX; /* get range */
+	range = min(rangeMax, range); /* clamp range */
+	*partCount = range; /* return range */
+
+	/* assign all in buffers */
+	for (int i = 0; i < range; i++)
+	{
+		partX[i] = minPartX + i;
+		partY[i] = minPartY + i;
+	}
+}
+
+/* ADD TO PARTITION */
+static inline void addToPartition(boundQuad* bq, int x, int y)
+{
+	
+}
+
+/* ASSIGN PARTITION */
+static inline void assignPartition(boundQuad* bq)
+{
+	int pCount = 0;
+	int pBuffX[0x20];
+	int pBuffY[0x20];
+
+
 }
 
 /*========================================*/
