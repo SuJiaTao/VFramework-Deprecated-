@@ -111,6 +111,22 @@ typedef struct projVect
 /* is the Bound object's dimensions and offset translated by it's transform */
 static boundQuad* _bqBuffer;
 
+/* SPACE PARTITION BUFFERS */
+typedef struct partition
+{
+	int x; /* partition x */
+	int y; /* partition y */
+	int bqCount;
+	int bqIndexes[VF_PARTITION_SIZE];
+} partition;
+
+static partition _partBuff[VF_PARTITION_COUNT];
+
+/* PARTITION CLEAR FUNCTION */
+static void clearPartition(partition* part)
+{
+	ZeroMemory(part, sizeof(partition));
+}
 
 /*========================================*/
 
