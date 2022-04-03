@@ -117,6 +117,7 @@ typedef struct partition
 	INT16  x; /* partition x */
 	INT16  y; /* partition y */
 	INT8   bqCount;
+	INT16  bqMemSize;
 	INT16* bqIndexes; /* dynamic array */
 } partition;
 
@@ -124,7 +125,7 @@ static partition _partBuff[VF_PARTITION_COUNT];
 static int _partitionCount = 0;
 static int _partitionSize = 2000;
 
-/* SPECALLOC/FREE */
+/* SPECALLOC */
 static void* specAlloc(int size)
 {
 	void* memLoc = vfMTAlloc(size, FALSE);
@@ -135,6 +136,7 @@ static void* specAlloc(int size)
 	}
 	return memLoc;
 }
+/* SPECFREE (returns true on used HeapFree) */
 static int specFree(void* ptr, int size)
 {
 	int fCheck = vfMTFree(ptr, size, FALSE);
@@ -146,6 +148,15 @@ static int specFree(void* ptr, int size)
 	}
 	return FALSE;
 }
+/* SPECCOPY (returns new ptr of new size) */
+static void* specCopy(BYTE* ptr, int oldSize, int newSize)
+{
+	BYTE* newPtr = specAlloc(newSize);
+	memcpy(newPtr, ptr, oldSize);
+	specFree(ptr, oldSize);
+	return newPtr;
+}
+
 /* PARTCHECK */
 static inline int partCheck(boundQuad* bq, int rangeMax,
 	int* partCount, int* partX, int* partY)
@@ -190,21 +201,60 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	/* check for existing partition */
 	for (int i = 0; i < _partitionCount; i++)
 	{
-		/* check for collision */
-		if (_partBuff[i].x == x && _partBuff[i].y == y)
+		partition* part = _partBuff + i;
+		/* skip if not collide */
+		if (part->x != x || part->y != y) continue;
+
+		/* if partition is empty, allocate for it */
+		if (part->bqMemSize == 0)
 		{
+			part->bqMemSize += VF_PARTITION_STEP;
+			part->bqIndexes = specAlloc(part->bqMemSize * sizeof(INT16));
 		}
+
+		/* add next boundquad to partition */
+		int bqIndex = bq - _bqBuffer;
+		part->bqIndexes[part->bqCount] = bqIndex;
+
+		/* return, since it's done */
+		return;
 	}
+
+	/* on no partitions left, exit early */
+	if (_partitionCount == VF_PARTITION_COUNT) return;
+
+	/* on exit loop without adding to partition, create new partition */
+	partition* part = _partBuff + _partitionCount; /* gets next free part */
+	part->x = x; part->y = y;
+	_partitionCount++;
+
+	/* if partition is empty, allocate for it */
+	if (part->bqMemSize == 0)
+	{
+		part->bqMemSize += VF_PARTITION_STEP;
+		part->bqIndexes = specAlloc(part->bqMemSize * sizeof(INT16));
+	}
+
+	/* add next boundquad to partition */
+	int bqIndex = bq - _bqBuffer;
+	part->bqIndexes[part->bqCount] = bqIndex;
 }
 
 /* ASSIGN PARTITION */
-static inline void assignPartition(boundQuad* bq)
+static void assignPartition(boundQuad* bq)
 {
+	/* buffers for later */
 	int pCount = 0;
-	int pBuffX[0x20];
-	int pBuffY[0x20];
+	int pBuffX[VF_ENT_PARTITIONS_MAX];
+	int pBuffY[VF_ENT_PARTITIONS_MAX];
 
+	/* check which part the bq is part of */
+	partCheck(bq, VF_ENT_PARTITIONS_MAX, &pCount, pBuffX,
+		pBuffY);
 
+	/* add bq to all given parts */
+	for (int i = 0; i < pCount; i++)
+		addToPartition(bq, pBuffX[i], pBuffY[i]);
 }
 
 /*========================================*/
