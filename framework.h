@@ -216,6 +216,7 @@ VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback);
 VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback);
 VFAPI int  vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 	int priorityRequest);
+VFAPI void vfSetPartitionSize(int size);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);

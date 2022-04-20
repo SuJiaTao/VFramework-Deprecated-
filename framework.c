@@ -838,9 +838,7 @@ static inline void updateCollisions(void)
 	/* first, clear partition buffer data */
 	_partitionCount = 0;
 	for (int i = 0; i < VF_PARTITION_COUNT; i++)
-	{
 		_partBuff[i].bqCount = 0;
-	}
 
 	/* update all partitions */
 	int boundCounter = 0;
@@ -1916,6 +1914,11 @@ VFAPI int vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 
 	/* if reached here, no free spot :( */
 	return -1;
+}
+
+VFAPI void vfSetPartitionSize(int size)
+{
+	_partitionSize = size;
 }
 
 /* DATA RELATED FUNCTIONS */
