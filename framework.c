@@ -53,6 +53,7 @@ static unsigned int _sleepTime;
 static int _pEnabled; /* physics toggle */
 static int _pUpdateTime = 0; /* physics update time taken */
 static int _pCollisionCheckCount = 0; /* amount of col checks */
+static int _pPartitionCheckCount = 0; /* amount of part jmps */
 
 static int _killSignal;   /* thread kill signal */
 static int _killRecieved; /* kill recieved signal */
@@ -151,47 +152,15 @@ typedef struct partition
 {
 	INT16  x; /* partition x */
 	INT16  y; /* partition y */
-	INT8   bqCount; /* boundquad count */
-	INT16  bqBuffSize; /* allocated buffer size */
-	INT16* bqIndexes; /* dynamic array */
+	UINT16   bqCount; /* boundquad count */
+	UINT16  bqBuffSize; /* allocated buffer size */
+	UINT16* bqIndexes; /* dynamic array */
 	float  velSum; /* sum of object velocities */
 } partition;
 
 static partition _partBuff[VF_PART_COUNT];
 static int _partitionCount = 0;
 static int _partitionSize = 10000;
-
-/* SPECALLOC */
-static void* specAlloc(int size)
-{
-	void* memLoc = vfMTAlloc(size, FALSE);
-	/* check mtalloc fail */
-	if (!memLoc)
-	{
-		memLoc = HeapAlloc(_heap, NULL, size);
-	}
-	return memLoc;
-}
-/* SPECFREE (returns true on used HeapFree) */
-static int specFree(void* ptr, int size)
-{
-	int fCheck = vfMTFree(ptr, size, FALSE);
-	/* on !fcheck, malloc was used */
-	if (!fCheck)
-	{
-		HeapFree(_heap, NULL, ptr);
-		return TRUE;
-	}
-	return FALSE;
-}
-/* SPECCOPY (returns new ptr of new size) */
-static void* specCopy(BYTE* ptr, int oldSize, int newSize)
-{
-	BYTE* newPtr = specAlloc(newSize);
-	memcpy(newPtr, ptr, oldSize);
-	specFree(ptr, oldSize);
-	return newPtr;
-}
 
 /* GET BQ VEL MAG (gets speed heuristic for a given bq) */
 static float getBQVelMag(boundQuad* bq)
@@ -279,13 +248,36 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 		partY[i] = minPartY + i;
 }
 
+/* ENSURE PARTITION SIZE */
+static inline void ensurePartitionSize(partition* part, int* checkTimer)
+{
+	/* if size if ok, return */
+	if (part->bqBuffSize > part->bqCount + VF_PART_CHANGETHRESH) return;
+
+	/* if index buffer is null */
+	if (part->bqIndexes == NULL)
+	{
+		/* increment and alloc */
+		part->bqBuffSize += VF_PART_STEP;
+		part->bqIndexes = HeapAlloc(_heap, NULL,
+			part->bqBuffSize * sizeof(UINT16));
+	}
+
+	/* if size is not big enough */
+	if (part->bqBuffSize <= part->bqCount)
+	{
+		/* increment step and realloc */
+		int oldSize = part->bqBuffSize;
+		part->bqBuffSize += VF_PART_STEP;
+		part->bqIndexes = HeapReAlloc(_heap, NULL,
+			part->bqIndexes, part->bqBuffSize * sizeof(UINT16));
+	}
+}
+
 /* ADD TO PARTITION */
-static ULONGLONG resizeCheckTimer = 0;
+static int _partShrinkTimer = 0;
 static inline void addToPartition(boundQuad* bq, int x, int y)
 {
-	/* increment resize counter */
-	resizeCheckTimer++;
-
 	/* check for existing partition */
 	for (int i = 0; i < _partitionCount; i++)
 	{
@@ -293,15 +285,10 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		/* skip if not collide */
 		if (part->x != x || part->y != y) continue;
 
-		/* if partition is empty, allocate for it */
-		if (part->bqBuffSize == 0)
-		{
-			part->bqBuffSize += VF_PART_STEP;
-			part->bqIndexes = HeapAlloc(_heap, FALSE, 
-				0xFF * sizeof(UINT16));
-		}
+		/* ensure partition capacity */
+		ensurePartitionSize(part, &_partShrinkTimer);
 
-		/* add next boundquad to partition */
+		/* add bqindex to partition */
 		int bqIndex = bq - _bqBuffer;
 		part->bqIndexes[part->bqCount] = bqIndex;
 
@@ -326,12 +313,8 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	part->x = x; part->y = y;
 	_partitionCount++;
 
-	/* if partition is empty, allocate for it */
-	if (part->bqBuffSize == 0)
-	{
-		part->bqBuffSize += VF_PART_STEP;
-		part->bqIndexes = specAlloc(part->bqBuffSize * sizeof(INT16));
-	}
+	/* ensure partition size */
+	ensurePartitionSize(part, &_partShrinkTimer);
 
 	/* add next boundquad to partition */
 	int bqIndex = bq - _bqBuffer;
@@ -868,17 +851,18 @@ static inline void updateCollisions(void)
 	_partitionCount = 0;
 	for (int i = 0; i < VF_PART_COUNT; i++)
 	{
+		/* clear partition members */
 		_partBuff[i].velSum  = 0;
 		_partBuff[i].bqCount = 0;
+		for (int j = 0; j < _partBuff[i].bqBuffSize; j++)
+		{
+			_partBuff[i].bqIndexes[j] = 0xFFFF;
+		}
 	}
 
 	/* update all partitions */
-	int boundCounter = 0;
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
-		/* break if boundCounter exceeded boundCount */
-		if (boundCounter > _bCount) break;
-
 		/* if bound is not used, skip */
 		if (!_bBufferField[i]) continue;
 
@@ -887,13 +871,12 @@ static inline void updateCollisions(void)
 
 		/* assign bounds to a partition */
 		assignPartition(_bqBuffer + i);
-
-		/* increment boundCounter*/
-		boundCounter++;
 	}
 
 	/* loop all partitions */
 	int colCheckCounter = 0;
+	int partCheckCounter = 0;
+	
 	for (int partIndex = 0; partIndex < _partitionCount; partIndex++)
 	{
 		/* get current physics partition */
@@ -904,6 +887,9 @@ static inline void updateCollisions(void)
 
 		/* if partition has size 1 or less, skip */
 		if (currentPart.bqCount <= 1) continue;
+
+		/* if reached here, will check partition */
+		partCheckCounter++;
 
 		/* loop all boundquads within partition */
 		/* sbIndex stands for "source boundquad index" */
@@ -957,8 +943,9 @@ static inline void updateCollisions(void)
 		}
 	}
 
-	/* reassign collision check amount */
+	/* reassign col/part check amount */
 	_pCollisionCheckCount = colCheckCounter;
+	_pPartitionCheckCount = partCheckCounter;
 
 	/* ACCUMULATE COLLISION DATA */
 	int accCount = 0;
@@ -1253,6 +1240,8 @@ static DWORD WINAPI vfMain(void* params)
 			updateEntityVelocities();
 
 			/* handle all collisions */
+			/* also update partition shrink timer */
+			_partShrinkTimer++;
 			updateCollisions();
 
 			/* handle velocity changes from collisions */
@@ -1283,6 +1272,7 @@ static DWORD WINAPI vfMain(void* params)
 		else
 		{
 			_pCollisionCheckCount = -1;
+			_pPartitionCheckCount = -1;
 			_pUpdateTime = -1;
 		}
 
@@ -2024,9 +2014,47 @@ VFAPI int vfGetPhysicsUpdateTime(void)
 	return _pUpdateTime;
 }
 
-VFAPI int vfGetPhysicsCollisionCheckCount(void)
+VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount, 
+	int* partCheckCount)
 {
-	return _pCollisionCheckCount;
+	*objCheckCount = _pCollisionCheckCount;
+	*partCheckCount = _pPartitionCheckCount;
+}
+
+VFAPI void vfLogPhysicsPartitions(FILE* file)
+{
+	fprintf(file, "========== TICKCOUNT: %08lld ==========\n", _tickCount);
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		/* print general data */
+		partition* p = _partBuff + i;
+		fprintf(file, "{%d} [%d, %d] size: %d used: %d vel: %f/%f\n",
+			i, p->x, p->y, p->bqBuffSize, p->bqCount,
+			p->velSum, floorf(p->velSum));
+
+		/* print partition indexes */
+		for (int j = 0; j < p->bqCount; j++)
+		{
+			/* newline every 20 elements*/
+			if (j % 20 == 0 && j != 0) fprintf(file, "\n");
+
+			/* print index */
+			fprintf(file, "%02d ", p->bqIndexes[j]);
+		}
+		fprintf(file, "\n");
+	}
+}
+
+VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
+	int* xBuff, int* yBuff, int* xSize, int* ySize)
+{
+	/* get entity boundquad */
+	vfBound* entBounds = ent->bounds;
+	int bIndex = entBounds - _bBuffer;
+	boundQuad* entBQ = _bqBuffer + bIndex;
+
+	/* get partitions */
+	partCheck(entBQ, maxPartitions, xSize, ySize, xBuff, yBuff);
 }
 
 /* DATA RELATED FUNCTIONS */

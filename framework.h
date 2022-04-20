@@ -64,6 +64,7 @@
 #define VF_PART_SKIP_DAMPENER 2.5f
 #define VF_PART_SKIP_MINAGE  0x10
 #define VF_PART_CHANGETHRESH 0x10
+#define VF_PART_LOGTIME 0x40
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
@@ -222,7 +223,11 @@ VFAPI int  vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 	int priorityRequest);
 VFAPI void vfSetPartitionSize(int size);
 VFAPI int vfGetPhysicsUpdateTime(void);
-VFAPI int vfGetPhysicsCollisionCheckCount(void);
+VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount, 
+	int* partCheckCount);
+VFAPI void vfLogPhysicsPartitions(FILE* file);
+VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
+	int* xBuff, int* yBuff, int* xSize, int* ySize);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
