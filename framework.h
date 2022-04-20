@@ -62,6 +62,7 @@
 #define VF_PART_SHRINK_TIME 0x40
 #define VF_PART_OVERLAPSCALE 1.5f
 #define VF_PART_SKIP_DAMPENER 2.5f
+#define VF_PART_SKIP_MINAGE  0x10
 #define VF_PART_CHANGETHRESH 0x10
 
 #define VF_OBJ_TRANSFORM 0x10
@@ -126,6 +127,8 @@ typedef struct vfPhysics
 
 	vfVector velocity;
 	float tourque;
+
+	unsigned long long age;
 } vfPhysics;
 
 typedef struct vfBound

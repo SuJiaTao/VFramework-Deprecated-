@@ -199,6 +199,14 @@ static float getBQVelMag(boundQuad* bq)
 	float velX = fabsf(bq->staticData.entity->physics.velocity.x);
 	float velY = fabsf(bq->staticData.entity->physics.velocity.y);
 	float velT = fabsf(bq->staticData.entity->physics.tourque);
+
+	/* if age is young, return positive num */
+	if (bq->staticData.entity->physics.age < VF_PART_SKIP_MINAGE)
+	{
+		return 0x1;
+	}
+
+	/* else, return standard value*/
 	return (velX + velY + velT) * VF_PART_SKIP_DAMPENER;
 }
 
@@ -933,8 +941,14 @@ static inline void updateCollisions(void)
 				if (sourcePtr == targetPtr) continue;
 
 				/* if both velocities are zero, skip */
+				/* physics ages must also be mature, since newly */
+				/* spawned objects generally have 0 velocity */
+				ULONG64 sAge = sourcePtr->staticData.entity->physics.age;
+				ULONG64 tAge = targetPtr->staticData.entity->physics.age;
 				if (floorf(getBQVelMag(sourcePtr)) == 0 &&
-					floorf(getBQVelMag(targetPtr)) == 0) continue;
+					floorf(getBQVelMag(targetPtr)) == 0 &&
+					sAge > VF_PART_SKIP_MINAGE &&
+					tAge > VF_PART_SKIP_MINAGE) continue;
 
 				/* perform collision check */
 				collisionCheck(sourcePtr, targetPtr);
@@ -1143,6 +1157,33 @@ static inline void updateCollisionVelocities(void)
 	} /* END COLLISION OBJECT LOOP */
 }
 
+/* ==== UPDATE AGE FUNCTION ==== */
+static inline void updatePhyiscsAges(void)
+{
+	int updateCount = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		/* get entity */
+		vfEntity* ent = _eBuffer + i;
+
+		/* if checked all entities, break */
+		if (updateCount >= _eCount) break;
+
+		/* if entity doesn't exist, continue */
+		if (!_eBufferField[i]) continue;
+
+		/* if entity is inactive, continue */
+		if (!ent->active) { updateCount++; continue; };
+
+		/* if ent physics inactive, continue */
+		if (!ent->physics.active) { updateCount++; continue; };
+
+		/* update phyiscs age */
+		ent->physics.age++;
+		updateCount++;
+	}
+}
+
 /* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
 {
@@ -1216,6 +1257,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			/* handle velocity changes from collisions */
 			updateCollisionVelocities();
+
+			/* update phyiscs ages */
+			updatePhyiscsAges();
 
 			/* call all callbacks */
 			int callCount = 0;
@@ -1538,6 +1582,7 @@ VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 	rPhys.tourque = FALSE;
 	rPhys.rotationLock = FALSE;
 	rPhys.active = TRUE;
+	rPhys.age = 0;
 
 	return rPhys;
 }
@@ -1554,6 +1599,7 @@ VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
 	rPhys.tourque = 0;
 	rPhys.rotationLock = rotationLock;
 	rPhys.active = TRUE;
+	rPhys.age = 0;
 	
 	return rPhys;
 }
