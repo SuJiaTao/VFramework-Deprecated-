@@ -1109,6 +1109,7 @@ static inline void updateCollisionVelocities(void)
 }
 
 /* ===== MODULE MAIN FUNCTION ===== */
+static int _updateTime = 0;
 static DWORD WINAPI vfMain(void* params)
 {
 	ULONGLONG lastTime = 0;
@@ -1165,6 +1166,8 @@ static DWORD WINAPI vfMain(void* params)
 
 		if (_pEnabled)
 		{
+			ULONGLONG startTickCount = GetTickCount64();
+
 			/* update fTransform objects */
 			updateFinalTransforms();
 
@@ -1195,6 +1198,13 @@ static DWORD WINAPI vfMain(void* params)
 				callCount++;
 				if (callCount >= _sCallSize) break;
 			}
+
+			ULONGLONG endTickCount = GetTickCount64();
+			_updateTime = endTickCount - startTickCount;
+		}
+		else
+		{
+			_updateTime = -1;
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
@@ -1864,6 +1874,9 @@ VFAPI void vfRenderPartitions(void)
 	{
 		partition renderPart = _partBuff[i];
 
+		/* if partition only has one or less, skip rect */
+		if (renderPart.bqCount <= 1) continue;
+
 		/* draw rect */
 		vgColor4(min(renderPart.bqCount * 0x40, 0xFF), 0x80, 0x80, 0x40);
 		vgRect(renderPart.x * _partitionSize,
@@ -1920,6 +1933,11 @@ VFAPI int vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 VFAPI void vfSetPartitionSize(int size)
 {
 	_partitionSize = size;
+}
+
+VFAPI ULONGLONG vfGetPhysicsUpdateTime(void)
+{
+	return _updateTime;
 }
 
 /* DATA RELATED FUNCTIONS */
