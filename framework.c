@@ -190,7 +190,7 @@ static void* specCopy(BYTE* ptr, int oldSize, int newSize)
 
 /* PARTCHECK */
 static inline int partCheck(boundQuad* bq, int rangeMax,
-	int* partCount, int* partX, int* partY)
+	int* partCountX, int* partCountY, int* partX, int* partY)
 {
 	/* for each vert, get it's partition coordinate */
 	int pBuff[0x10][2];
@@ -242,19 +242,19 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 		maxPartY = max(maxPartY, pBuff[i][1]);
 	}
 
-	/* get all partIndexes between the given parts */
-	/* get range + 1, so that only one partition used will */
-	/* still be assigned */
-	int range = (maxPartX - minPartX) + 1;
-	range = min(rangeMax, range); /* clamp range */
-	*partCount = range; /* return range */
+	/* get range of X and Y*/
+	int rangeX = min(rangeMax, max(maxPartX - minPartX, 1));
+	int rangeY = min(rangeMax, max(maxPartY - minPartY, 1));
+
+	/* return ranges */
+	*partCountX = rangeX;
+	*partCountY = rangeY;
 
 	/* assign all in buffers */
-	for (int i = 0; i < range; i++)
-	{
+	for (int i = 0; i < rangeX; i++)
 		partX[i] = minPartX + i;
+	for (int i = 0; i < rangeY; i++)
 		partY[i] = minPartY + i;
-	}
 }
 
 /* ADD TO PARTITION */
@@ -318,17 +318,18 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 static void assignPartition(boundQuad* bq)
 {
 	/* buffers for later */
-	int pCount = 0;
+	int pCountX = 0;
+	int pCountY = 0;
 	int pBuffX[VF_ENT_PARTITIONS_MAX];
 	int pBuffY[VF_ENT_PARTITIONS_MAX];
 
 	/* check which part the bq is part of */
-	partCheck(bq, VF_ENT_PARTITIONS_MAX, &pCount, pBuffX,
+	partCheck(bq, VF_ENT_PARTITIONS_MAX, &pCountX, &pCountY, pBuffX,
 		pBuffY);
 
 	/* add bq to all given parts */
-	for (int rows = 0; rows < pCount; rows++)
-		for (int cols = 0; cols < pCount; cols++)
+	for (int rows = 0; rows < pCountX; rows++)
+		for (int cols = 0; cols < pCountY; cols++)
 			addToPartition(bq, pBuffX[rows], pBuffY[cols]);
 }
 
