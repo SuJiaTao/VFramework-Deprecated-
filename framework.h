@@ -56,12 +56,13 @@
 #define VF_VECTOR_SIMILARITY_THRESOLD 0.15f
 #define VF_POSITION_SIMILARITY 0.03f
 
-#define VF_PARTITION_COUNT 0x80
-#define VF_PARTITION_STEP 0x40
-#define VF_ENT_PARTITIONS_MAX 0x10
-#define VF_PARTITION_SHRINK_TIME 0x40
-#define VF_PARTITION_OVERLAPSCALE 1.5f
-#define VF_PARTITION_CHANGETHRESH 0x10
+#define VF_PART_COUNT 0x100
+#define VF_PART_STEP 0x40
+#define VF_ENT_PART_MAX 0x10
+#define VF_PART_SHRINK_TIME 0x40
+#define VF_PART_OVERLAPSCALE 1.5f
+#define VF_PART_SKIP_DAMPENER 2.5f
+#define VF_PART_CHANGETHRESH 0x10
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
@@ -217,7 +218,8 @@ VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback);
 VFAPI int  vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 	int priorityRequest);
 VFAPI void vfSetPartitionSize(int size);
-VFAPI ULONGLONG vfGetPhysicsUpdateTime(void);
+VFAPI int vfGetPhysicsUpdateTime(void);
+VFAPI int vfGetPhysicsCollisionCheckCount(void);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);

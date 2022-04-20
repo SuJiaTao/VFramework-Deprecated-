@@ -49,7 +49,11 @@ static HANDLE _writeMutex; /* buffer use mutex */
 static HANDLE _drawMutex;  /* draw mutex */
 static HANDLE _killMutex;  /* kill mutex */
 static unsigned int _sleepTime;
+
 static int _pEnabled; /* physics toggle */
+static int _pUpdateTime = 0; /* physics update time taken */
+static int _pCollisionCheckCount = 0; /* amount of col checks */
+
 static int _killSignal;   /* thread kill signal */
 static int _killRecieved; /* kill recieved signal */
 
@@ -147,12 +151,13 @@ typedef struct partition
 {
 	INT16  x; /* partition x */
 	INT16  y; /* partition y */
-	INT8   bqCount;
-	INT16  bqMemSize;
+	INT8   bqCount; /* boundquad count */
+	INT16  bqBuffSize; /* allocated buffer size */
 	INT16* bqIndexes; /* dynamic array */
+	float  velSum; /* sum of object velocities */
 } partition;
 
-static partition _partBuff[VF_PARTITION_COUNT];
+static partition _partBuff[VF_PART_COUNT];
 static int _partitionCount = 0;
 static int _partitionSize = 10000;
 
@@ -202,9 +207,9 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 		float centerOffsetX = bq->verts[i].x - bq->average.x;
 		float centerOffsetY = bq->verts[i].y - bq->average.y;
 		float posXScaled = bq->average.x + 
-			(centerOffsetX * VF_PARTITION_OVERLAPSCALE);
+			(centerOffsetX * VF_PART_OVERLAPSCALE);
 		float posYScaled = bq->average.y +
-			(centerOffsetY * VF_PARTITION_OVERLAPSCALE);
+			(centerOffsetY * VF_PART_OVERLAPSCALE);
 
 		/* get partition coordinates */
 		float partPosX = posXScaled / (float)_partitionSize;
@@ -272,9 +277,9 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		if (part->x != x || part->y != y) continue;
 
 		/* if partition is empty, allocate for it */
-		if (part->bqMemSize == 0)
+		if (part->bqBuffSize == 0)
 		{
-			part->bqMemSize += VF_PARTITION_STEP;
+			part->bqBuffSize += VF_PART_STEP;
 			part->bqIndexes = HeapAlloc(_heap, FALSE, 
 				0xFF * sizeof(UINT16));
 		}
@@ -283,13 +288,20 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		int bqIndex = bq - _bqBuffer;
 		part->bqIndexes[part->bqCount] = bqIndex;
 
+		/* add velocity sum to it */
+		float bqVelX = fabsf(bq->staticData.entity->physics.velocity.x);
+		float bqVelY = fabsf(bq->staticData.entity->physics.velocity.y);
+		float bqRotT = fabsf(bq->staticData.entity->physics.tourque);
+		part->velSum += (bqVelX + bqVelY + bqRotT);
+		part->velSum *= VF_PART_SKIP_DAMPENER;
+
 		/* return, since it's done */
 		part->bqCount++;
 		return;
 	}
 
 	/* on no partitions left, report err and exit */
-	if (_partitionCount == VF_PARTITION_COUNT)
+	if (_partitionCount == VF_PART_COUNT)
 	{
 		MessageBoxA(NULL, "No physics partitions left!\n",
 			"CRITICAL ENGINE FAILURE", MB_OK);
@@ -302,16 +314,23 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	_partitionCount++;
 
 	/* if partition is empty, allocate for it */
-	if (part->bqMemSize == 0)
+	if (part->bqBuffSize == 0)
 	{
-		part->bqMemSize += VF_PARTITION_STEP;
-		part->bqIndexes = specAlloc(part->bqMemSize * sizeof(INT16));
+		part->bqBuffSize += VF_PART_STEP;
+		part->bqIndexes = specAlloc(part->bqBuffSize * sizeof(INT16));
 	}
 
 	/* add next boundquad to partition */
 	int bqIndex = bq - _bqBuffer;
 	part->bqIndexes[part->bqCount] = bqIndex;
 	part->bqCount++;
+
+	/* add velocity sum to it */
+	float bqVelX = fabsf(bq->staticData.entity->physics.velocity.x);
+	float bqVelY = fabsf(bq->staticData.entity->physics.velocity.y);
+	float bqRotT = fabsf(bq->staticData.entity->physics.tourque);
+	part->velSum += (bqVelX + bqVelY + bqRotT);
+	part->velSum *= VF_PART_SKIP_DAMPENER;
 }
 
 /* ASSIGN PARTITION */
@@ -320,11 +339,11 @@ static void assignPartition(boundQuad* bq)
 	/* buffers for later */
 	int pCountX = 0;
 	int pCountY = 0;
-	int pBuffX[VF_ENT_PARTITIONS_MAX];
-	int pBuffY[VF_ENT_PARTITIONS_MAX];
+	int pBuffX[VF_ENT_PART_MAX];
+	int pBuffY[VF_ENT_PART_MAX];
 
 	/* check which part the bq is part of */
-	partCheck(bq, VF_ENT_PARTITIONS_MAX, &pCountX, &pCountY, pBuffX,
+	partCheck(bq, VF_ENT_PART_MAX, &pCountX, &pCountY, pBuffX,
 		pBuffY);
 
 	/* add bq to all given parts */
@@ -838,8 +857,11 @@ static inline void updateCollisions(void)
 {
 	/* first, clear partition buffer data */
 	_partitionCount = 0;
-	for (int i = 0; i < VF_PARTITION_COUNT; i++)
+	for (int i = 0; i < VF_PART_COUNT; i++)
+	{
+		_partBuff[i].velSum  = 0;
 		_partBuff[i].bqCount = 0;
+	}
 
 	/* update all partitions */
 	int boundCounter = 0;
@@ -862,10 +884,14 @@ static inline void updateCollisions(void)
 	}
 
 	/* loop all partitions */
+	int colCheckCounter = 0;
 	for (int partIndex = 0; partIndex < _partitionCount; partIndex++)
 	{
 		/* get current physics partition */
 		partition currentPart = _partBuff[partIndex];
+
+		/* if partition velocity is 0, skip */
+		if (floorf(currentPart.velSum) == 0) continue;
 
 		/* if partition has size 1 or less, skip */
 		if (currentPart.bqCount <= 1) continue;
@@ -907,9 +933,13 @@ static inline void updateCollisions(void)
 
 				/* perform collision check */
 				collisionCheck(sourcePtr, targetPtr);
+				colCheckCounter++;
 			}
 		}
 	}
+
+	/* reassign collision check amount */
+	_pCollisionCheckCount = colCheckCounter;
 
 	/* ACCUMULATE COLLISION DATA */
 	int accCount = 0;
@@ -1109,7 +1139,6 @@ static inline void updateCollisionVelocities(void)
 }
 
 /* ===== MODULE MAIN FUNCTION ===== */
-static int _updateTime = 0;
 static DWORD WINAPI vfMain(void* params)
 {
 	ULONGLONG lastTime = 0;
@@ -1200,11 +1229,12 @@ static DWORD WINAPI vfMain(void* params)
 			}
 
 			ULONGLONG endTickCount = GetTickCount64();
-			_updateTime = endTickCount - startTickCount;
+			_pUpdateTime = endTickCount - startTickCount;
 		}
 		else
 		{
-			_updateTime = -1;
+			_pCollisionCheckCount = -1;
+			_pUpdateTime = -1;
 		}
 
 		/* RELEASE BUFFER OWNERSHIP */
@@ -1877,6 +1907,9 @@ VFAPI void vfRenderPartitions(void)
 		/* if partition only has one or less, skip rect */
 		if (renderPart.bqCount <= 1) continue;
 
+		/* if partition velsum is 0, skip rect */
+		if (floorf(renderPart.velSum) == 0) continue;
+
 		/* draw rect */
 		vgColor4(min(renderPart.bqCount * 0x40, 0xFF), 0x80, 0x80, 0x40);
 		vgRect(renderPart.x * _partitionSize,
@@ -1935,9 +1968,14 @@ VFAPI void vfSetPartitionSize(int size)
 	_partitionSize = size;
 }
 
-VFAPI ULONGLONG vfGetPhysicsUpdateTime(void)
+VFAPI int vfGetPhysicsUpdateTime(void)
 {
-	return _updateTime;
+	return _pUpdateTime;
+}
+
+VFAPI int vfGetPhysicsCollisionCheckCount(void)
+{
+	return _pCollisionCheckCount;
 }
 
 /* DATA RELATED FUNCTIONS */
