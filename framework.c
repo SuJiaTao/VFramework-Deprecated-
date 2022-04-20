@@ -150,6 +150,7 @@ static boundQuad* _bqBuffer;
 /* SPACE PARTITION BUFFERS */
 typedef struct partition
 {
+	UINT16 overfitAge; /* time with excess memory allocated */
 	INT16  x; /* partition x */
 	INT16  y; /* partition y */
 	UINT16   bqCount; /* boundquad count */
@@ -172,7 +173,7 @@ static float getBQVelMag(boundQuad* bq)
 	/* if age is young, return positive num */
 	if (bq->staticData.entity->physics.age < VF_PART_SKIP_MINAGE)
 	{
-		return 0x1;
+		return 0xFF;
 	}
 
 	/* else, return standard value*/
@@ -249,10 +250,34 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 }
 
 /* ENSURE PARTITION SIZE */
-static inline void ensurePartitionSize(partition* part, int* checkTimer)
+static inline void ensurePartitionSize(partition* part)
 {
+	/* if overfitage is too great, de-alloc some memory */
+	if (part->overfitAge > VF_PART_OVERAGE_TIME)
+	{
+		/* decrement and free */
+		part->bqBuffSize -= VF_PART_STEP;
+		HeapFree(_heap, NULL, part->bqIndexes);
+
+		/* if size is 0, set buffer to null */
+		if (part->bqBuffSize == 0)
+		{
+			part->bqIndexes  = NULL;
+			part->overfitAge = 0;
+		}
+		else /* else, realloc */
+		{
+			/* realloc */
+			part->bqIndexes = HeapAlloc(_heap, NULL,
+				part->bqBuffSize * sizeof(UINT16));
+
+			/* reset overfit age */
+			part->overfitAge = 0;
+		}
+	} /* overfit check exit */
+
 	/* if size if ok, return */
-	if (part->bqBuffSize > part->bqCount + VF_PART_CHANGETHRESH) return;
+	if (part->bqBuffSize > part->bqCount) return;
 
 	/* if index buffer is null */
 	if (part->bqIndexes == NULL)
@@ -275,7 +300,6 @@ static inline void ensurePartitionSize(partition* part, int* checkTimer)
 }
 
 /* ADD TO PARTITION */
-static int _partShrinkTimer = 0;
 static inline void addToPartition(boundQuad* bq, int x, int y)
 {
 	/* check for existing partition */
@@ -286,7 +310,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		if (part->x != x || part->y != y) continue;
 
 		/* ensure partition capacity */
-		ensurePartitionSize(part, &_partShrinkTimer);
+		ensurePartitionSize(part);
 
 		/* add bqindex to partition */
 		int bqIndex = bq - _bqBuffer;
@@ -314,7 +338,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	_partitionCount++;
 
 	/* ensure partition size */
-	ensurePartitionSize(part, &_partShrinkTimer);
+	ensurePartitionSize(part);
 
 	/* add next boundquad to partition */
 	int bqIndex = bq - _bqBuffer;
@@ -873,6 +897,22 @@ static inline void updateCollisions(void)
 		assignPartition(_bqBuffer + i);
 	}
 
+	/* check all partitions for overfit, and then update values */
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		/* get partition, if partition allocated memory is */
+		/* greater than 1 step above memory needed + extra, */
+		/* then mark partition by incrementing overfitage */
+		partition* checkPart = _partBuff + i;
+		if (checkPart->bqBuffSize > 
+			checkPart->bqCount + VF_PART_STEP)
+		{
+			/* when overfitage is checked to be over a certain thres, */
+			/* memory will be freed up. */
+			checkPart->overfitAge++;
+		}
+	}
+
 	/* loop all partitions */
 	int colCheckCounter = 0;
 	int partCheckCounter = 0;
@@ -1240,8 +1280,6 @@ static DWORD WINAPI vfMain(void* params)
 			updateEntityVelocities();
 
 			/* handle all collisions */
-			/* also update partition shrink timer */
-			_partShrinkTimer++;
 			updateCollisions();
 
 			/* handle velocity changes from collisions */
@@ -2009,6 +2047,11 @@ VFAPI void vfSetPartitionSize(int size)
 	_partitionSize = size;
 }
 
+VFAPI void vfGetPhysicsTickCount(long long* ticks)
+{
+	*ticks = _tickCount;
+}
+
 VFAPI int vfGetPhysicsUpdateTime(void)
 {
 	return _pUpdateTime;
@@ -2024,6 +2067,8 @@ VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount,
 VFAPI void vfLogPhysicsPartitions(FILE* file)
 {
 	fprintf(file, "========== TICKCOUNT: %08lld ==========\n", _tickCount);
+	fprintf(file, "Part count: %d\nPart size: %d\n",
+		_partitionCount, _partitionSize);
 	for (int i = 0; i < _partitionCount; i++)
 	{
 		/* print general data */
@@ -2043,6 +2088,8 @@ VFAPI void vfLogPhysicsPartitions(FILE* file)
 		}
 		fprintf(file, "\n");
 	}
+	/* flush buffer */
+	fflush(file);
 }
 
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
