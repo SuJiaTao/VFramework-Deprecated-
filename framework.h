@@ -56,6 +56,14 @@
 #define VF_VECTOR_SIMILARITY_THRESOLD 0.15f
 #define VF_POSITION_SIMILARITY 0.03f
 
+#define VF_PART_COUNT 0x100
+#define VF_PART_STEP 0x40
+#define VF_ENT_PART_MAX 0x10
+#define VF_PART_OVERAGE_TIME 0x80
+#define VF_PART_OVERLAPSCALE 1.5f
+#define VF_PART_SKIP_DAMPENER 2.5f
+#define VF_PART_SKIP_MINAGE  0x40
+
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
 #define VF_OBJ_PARTICLE 0x30
@@ -66,7 +74,7 @@
 #define VF_BUFF_PARTICLE 0x300
 #define VF_BUFF_ENTITY 0x400
 
-#define VF_MEMTANK_SIZE 0x1000
+#define VF_MEMTANK_SIZE 0x2000
 #define VF_MEMTANK_EXCESS 0x20
 #define VF_MEMTANK_INTERVAL 4
 #define VF_MEMTANK_FIELDSIZE (VF_MEMTANK_SIZE / VF_MEMTANK_INTERVAL)
@@ -118,6 +126,8 @@ typedef struct vfPhysics
 
 	vfVector velocity;
 	float tourque;
+
+	unsigned long long age;
 } vfPhysics;
 
 typedef struct vfBound
@@ -201,6 +211,7 @@ VFAPI void* vfGetObject(vfHandle handle, int type);
 VFAPI void vfRenderParticles(void);
 VFAPI void vfRenderEntities(void);
 VFAPI void vfRenderBounds(void);
+VFAPI void vfRenderPartitions(void);
 
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);
@@ -208,6 +219,14 @@ VFAPI void vfSetCollisionCallback(vfEntity* entity, ENTCOLCALLBACK callback);
 VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback);
 VFAPI int  vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 	int priorityRequest);
+VFAPI void vfSetPartitionSize(int size);
+VFAPI void vfGetPhysicsTickCount(long long* ticks);
+VFAPI int  vfGetPhysicsUpdateTime(void);
+VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount, 
+	int* partCheckCount);
+VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
+	int* xBuff, int* yBuff, int* xSize, int* ySize);
+VFAPI void vfLogPhysicsPartitions(FILE* file);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
