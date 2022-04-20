@@ -154,7 +154,7 @@ typedef struct partition
 
 static partition _partBuff[VF_PARTITION_COUNT];
 static int _partitionCount = 0;
-static int _partitionSize = 2000;
+static int _partitionSize = 10000;
 
 /* SPECALLOC */
 static void* specAlloc(int size)
@@ -252,7 +252,6 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 	/* assign all in buffers */
 	for (int i = 0; i < range; i++)
 	{
-		printf("%d\n", i);
 		partX[i] = minPartX + i;
 		partY[i] = minPartY + i;
 	}
@@ -276,28 +275,8 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		if (part->bqMemSize == 0)
 		{
 			part->bqMemSize += VF_PARTITION_STEP;
-			part->bqIndexes = specAlloc(part->bqMemSize * sizeof(INT16));
-		}
-
-		/* if need more boundquads, allocate for it */
-		if (part->bqCount == part->bqMemSize / sizeof(INT16))
-		{
-			part->bqMemSize += VF_PARTITION_STEP;
-			part->bqIndexes = specCopy(part->bqIndexes,
-				part->bqMemSize - VF_PARTITION_STEP,
-				part->bqMemSize);
-		}
-
-		/* if shrink time, check for shrink */
-		if (resizeCheckTimer > VF_PARTITION_SHRINK_TIME &&
-			part->bqCount < (part->bqMemSize - VF_PARTITION_STEP) /
-			sizeof(INT16))
-		{
-			part->bqMemSize -= VF_PARTITION_STEP;
-			part->bqIndexes = specCopy(part->bqIndexes,
-				part->bqMemSize + VF_PARTITION_STEP,
-				part->bqMemSize);
-			puts("shrank part!");
+			part->bqIndexes = HeapAlloc(_heap, FALSE, 
+				0xFF * sizeof(UINT16));
 		}
 
 		/* add next boundquad to partition */
@@ -909,15 +888,26 @@ static inline void updateCollisions(void)
 			/* within the partition tbIndex stands for "target bq indx" */
 			for (int tbIndex = 0; tbIndex < currentPart.bqCount; tbIndex++)
 			{
-				/* if target bound is inactive, continue */
+				/* if target bound is unused, continue */
 				if (!_bBufferField[currentPart.bqIndexes[tbIndex]]) continue;
+
+				/* if target bound is inactive, continue */
+				if (!_bqBuffer[currentPart.bqIndexes[tbIndex]]
+					.staticData.active) continue;
 
 				/* if target and source are the same, continue */
 				if (sbIndex == tbIndex) continue;
 
+				/* if for some reason the source and target are repeated */
+				/* multiple times in the partition, also skip it */
+				boundQuad* sourcePtr = _bqBuffer +
+					currentPart.bqIndexes[sbIndex];
+				boundQuad* targetPtr = _bqBuffer +
+					currentPart.bqIndexes[tbIndex];
+				if (sourcePtr == targetPtr) continue;
+
 				/* perform collision check */
-				collisionCheck(_bqBuffer + currentPart.bqIndexes[sbIndex],
-					_bqBuffer + currentPart.bqIndexes[tbIndex]);
+				collisionCheck(sourcePtr, targetPtr);
 			}
 		}
 	}
@@ -1874,8 +1864,6 @@ VFAPI void vfRenderPartitions(void)
 	for (int i = 0; i < _partitionCount; i++)
 	{
 		partition renderPart = _partBuff[i];
-		/* if partition has 1 or less, skip */
-		if (renderPart.bqCount <= 1) continue;
 
 		/* draw rect */
 		vgColor4(min(renderPart.bqCount * 0x40, 0xFF), 0x80, 0x80, 0x40);
