@@ -193,7 +193,8 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 	int* partCount, int* partX, int* partY)
 {
 	/* for each vert, get it's partition coordinate */
-	int pBuff[0x4][2];
+	int pBuff[0x10][2];
+	int pBuffUse = 0;
 	for (int i = 0; i < 0x4; i++)
 	{
 		/* get each vertex but scale them out from average */
@@ -208,18 +209,32 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 		/* get partition coordinates */
 		float partPosX = posXScaled / (float)_partitionSize;
 		float partPosY = posYScaled / (float)_partitionSize;
-		
-		/* assign coordinates */
-		pBuff[i][0] = (int)floorf(partPosX);
-		pBuff[i][1] = (int)floorf(partPosY);
+
+		/* assign coordinates (floored) */
+		pBuff[pBuffUse][0] = (int)floorf(partPosX);
+		pBuff[pBuffUse][1] = (int)floorf(partPosY);
+		pBuffUse++;
+		/* assign coordinates (ceiled) */
+		pBuff[pBuffUse][0] = (int)ceilf(partPosX);
+		pBuff[pBuffUse][1] = (int)ceilf(partPosY);
+		pBuffUse++;
 	}
+
+	/* assign average position to pBuff (floored) */
+	pBuff[pBuffUse][0] = (int)floorf(bq->average.x / (float)_partitionSize);
+	pBuff[pBuffUse][1] = (int)floorf(bq->average.y / (float)_partitionSize);
+	pBuffUse++;
+	/* assign average position to pBuff (ceiled) */
+	pBuff[pBuffUse][0] = (int)ceilf(bq->average.x / (float)_partitionSize);
+	pBuff[pBuffUse][1] = (int)ceilf(bq->average.y / (float)_partitionSize);
+	pBuffUse++;
 
 	/* create bounding box around boundQuad */
 	int minPartX = pBuff[0][0]; int maxPartX = pBuff[0][0];
 	int minPartY = pBuff[0][1]; int maxPartY = pBuff[0][1];
 
 	/* loop to find min/max */
-	for (int i = 0; i < 0x4; i++)
+	for (int i = 0; i < pBuffUse; i++)
 	{
 		minPartX = min(minPartX, pBuff[i][0]);
 		maxPartX = max(maxPartX, pBuff[i][0]);
@@ -237,6 +252,7 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 	/* assign all in buffers */
 	for (int i = 0; i < range; i++)
 	{
+		printf("%d\n", i);
 		partX[i] = minPartX + i;
 		partY[i] = minPartY + i;
 	}
@@ -840,9 +856,6 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 /* ======== COLLISION HANDLING FUNCTION ======== */
 static inline void updateCollisions(void)
 {
-	/* capture mutex */
-	captureMutex("Partition Update Capture Failed");
-
 	/* first, clear partition buffer data */
 	_partitionCount = 0;
 	for (int i = 0; i < VF_PARTITION_COUNT; i++)
@@ -870,28 +883,14 @@ static inline void updateCollisions(void)
 		boundCounter++;
 	}
 
-	/* release mutex */
-	releaseMutex();
-
-	/*
-	puts("partitions:");
-	for (int i = 0; i < _partitionCount; i++)
-	{
-		printf("[%d] (%d,%d) s: %d p:", i, _partBuff[i].x,
-			_partBuff[i].y, _partBuff[i].bqCount);
-		for (int j = 0; j < _partBuff[i].bqCount; j++)
-		{
-			printf("%d ", _partBuff[i].bqIndexes[j]);
-		}
-		puts("");
-	}
-	*/
-
 	/* loop all partitions */
 	for (int partIndex = 0; partIndex < _partitionCount; partIndex++)
 	{
 		/* get current physics partition */
 		partition currentPart = _partBuff[partIndex];
+
+		/* if partition has size 1 or less, skip */
+		if (currentPart.bqCount <= 1) continue;
 
 		/* loop all boundquads within partition */
 		/* sbIndex stands for "source boundquad index" */
@@ -1845,9 +1844,6 @@ VFAPI void vfRenderPartitions(void)
 	/* check for framskip */
 	if (vgGetRenderSkipState()) return;
 
-	/* get mutex */
-	captureMutex("Partition Rendering Timeout");
-
 	/* set render layer*/
 	vgRenderLayer(0x10);
 
@@ -1870,7 +1866,7 @@ VFAPI void vfRenderPartitions(void)
 		vgLine(pMinX, pMinY, pMinX, pMaxY); /* left   */
 		vgLine(pMinX, pMaxY, pMaxX, pMaxY); /* top    */
 		vgLine(pMaxX, pMinY, pMaxX, pMaxY); /* right  */
-		vgLine(pMinX, pMinY, pMaxX, pMaxY); /* bottom */
+		vgLine(pMinX, pMinY, pMaxX, pMinY); /* bottom */
 	}
 	vgLineSize(1);
 
@@ -1878,14 +1874,16 @@ VFAPI void vfRenderPartitions(void)
 	for (int i = 0; i < _partitionCount; i++)
 	{
 		partition renderPart = _partBuff[i];
+		/* if partition has 1 or less, skip */
+		if (renderPart.bqCount <= 1) continue;
+
+		/* draw rect */
 		vgColor4(min(renderPart.bqCount * 0x40, 0xFF), 0x80, 0x80, 0x40);
 		vgRect(renderPart.x * _partitionSize,
 			   renderPart.y * _partitionSize,
 			_partitionSize,
 			_partitionSize);
 	}
-
-	releaseMutex();
 }
 
 /* PHYSICS RELATED FUNCTIONS */
