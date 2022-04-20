@@ -193,6 +193,15 @@ static void* specCopy(BYTE* ptr, int oldSize, int newSize)
 	return newPtr;
 }
 
+/* GET BQ VEL MAG (gets speed heuristic for a given bq) */
+static float getBQVelMag(boundQuad* bq)
+{
+	float velX = fabsf(bq->staticData.entity->physics.velocity.x);
+	float velY = fabsf(bq->staticData.entity->physics.velocity.y);
+	float velT = fabsf(bq->staticData.entity->physics.tourque);
+	return (velX + velY + velT) * VF_PART_SKIP_DAMPENER;
+}
+
 /* PARTCHECK */
 static inline int partCheck(boundQuad* bq, int rangeMax,
 	int* partCountX, int* partCountY, int* partX, int* partY)
@@ -289,11 +298,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		part->bqIndexes[part->bqCount] = bqIndex;
 
 		/* add velocity sum to it */
-		float bqVelX = fabsf(bq->staticData.entity->physics.velocity.x);
-		float bqVelY = fabsf(bq->staticData.entity->physics.velocity.y);
-		float bqRotT = fabsf(bq->staticData.entity->physics.tourque);
-		part->velSum += (bqVelX + bqVelY + bqRotT);
-		part->velSum *= VF_PART_SKIP_DAMPENER;
+		part->velSum += getBQVelMag(bq);
 
 		/* return, since it's done */
 		part->bqCount++;
@@ -326,11 +331,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	part->bqCount++;
 
 	/* add velocity sum to it */
-	float bqVelX = fabsf(bq->staticData.entity->physics.velocity.x);
-	float bqVelY = fabsf(bq->staticData.entity->physics.velocity.y);
-	float bqRotT = fabsf(bq->staticData.entity->physics.tourque);
-	part->velSum += (bqVelX + bqVelY + bqRotT);
-	part->velSum *= VF_PART_SKIP_DAMPENER;
+	part->velSum += getBQVelMag(bq);
 }
 
 /* ASSIGN PARTITION */
@@ -930,6 +931,10 @@ static inline void updateCollisions(void)
 				boundQuad* targetPtr = _bqBuffer +
 					currentPart.bqIndexes[tbIndex];
 				if (sourcePtr == targetPtr) continue;
+
+				/* if both velocities are zero, skip */
+				if (floorf(getBQVelMag(sourcePtr)) == 0 &&
+					floorf(getBQVelMag(targetPtr)) == 0) continue;
 
 				/* perform collision check */
 				collisionCheck(sourcePtr, targetPtr);
