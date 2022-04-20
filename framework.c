@@ -257,7 +257,7 @@ static inline void ensurePartitionSize(partition* part)
 	{
 		/* decrement and free */
 		part->bqBuffSize -= VF_PART_STEP;
-		HeapFree(_heap, NULL, part->bqIndexes);
+		HeapFree(_heap, 0, part->bqIndexes);
 
 		/* if size is 0, set buffer to null */
 		if (part->bqBuffSize == 0)
@@ -268,7 +268,7 @@ static inline void ensurePartitionSize(partition* part)
 		else /* else, realloc */
 		{
 			/* realloc */
-			part->bqIndexes = HeapAlloc(_heap, NULL,
+			part->bqIndexes = HeapAlloc(_heap, 0,
 				part->bqBuffSize * sizeof(UINT16));
 
 			/* reset overfit age */
@@ -284,7 +284,7 @@ static inline void ensurePartitionSize(partition* part)
 	{
 		/* increment and alloc */
 		part->bqBuffSize += VF_PART_STEP;
-		part->bqIndexes = HeapAlloc(_heap, NULL,
+		part->bqIndexes = HeapAlloc(_heap, 0,
 			part->bqBuffSize * sizeof(UINT16));
 	}
 
@@ -294,7 +294,7 @@ static inline void ensurePartitionSize(partition* part)
 		/* increment step and realloc */
 		int oldSize = part->bqBuffSize;
 		part->bqBuffSize += VF_PART_STEP;
-		part->bqIndexes = HeapReAlloc(_heap, NULL,
+		part->bqIndexes = HeapReAlloc(_heap, 0,
 			part->bqIndexes, part->bqBuffSize * sizeof(UINT16));
 	}
 }
@@ -1217,7 +1217,7 @@ static DWORD WINAPI vfMain(void* params)
 	ULONGLONG lastTime = 0;
 	
 	/* get ahold of kill mutex */
-	int result = WaitForSingleObject(_killMutex, NULL);
+	int result = WaitForSingleObject(_killMutex, 0);
 
 	while (TRUE)
 	{
@@ -1305,7 +1305,7 @@ static DWORD WINAPI vfMain(void* params)
 			}
 
 			ULONGLONG endTickCount = GetTickCount64();
-			_pUpdateTime = endTickCount - startTickCount;
+			_pUpdateTime = (int)(endTickCount - startTickCount);
 		}
 		else
 		{
@@ -1462,7 +1462,6 @@ VFAPI vfColor vfCreateColor(int r, int g, int b, int a)
 
 VFAPI vfTransform* vfCreateTransformv(vfVector vector)
 {
-
 	/* find transform buffer spot */
 	int tIndex = findBufferSpot(_tBuffer, _tBufferField,
 		sizeof(vfTransform));
@@ -1646,7 +1645,6 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	
 	/* get return entity and init values */
 	vfEntity* rEnt = _eBuffer + eIndex;
-	rEnt->active = TRUE;
 
 	rEnt->transform = vfCreateTransforma(vfCreateVector(0, 0), 0, 1);
 	rEnt->bounds = vfCreateBounda(rEnt->transform, boundPosition,
@@ -1659,6 +1657,9 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	vfBound* entBounds = rEnt->bounds;
 	entBounds->entity = rEnt;
 	rEnt->collisionCallback = NULL;
+
+	/* set active last */
+	rEnt->active = TRUE;
 
 	releaseMutex( );
 	return rEnt;
@@ -1959,7 +1960,7 @@ VFAPI void vfRenderPartitions(void)
 	vgLineSize(1.5f);
 	/* render x and y axis */
 	vgColor3(0xFF, 0x20, 0x20); vgLine(INT_MAX, 0, INT_MIN, 0);
-	vgColor3(0x20, 0x20, 0xFF); vgLine(0, INT_MAX, 0, INT_MIN, 0);
+	vgColor3(0x20, 0x20, 0xFF); vgLine(0, INT_MAX, 0, INT_MIN);
 	/* render all partition boundaries */
 	vgColor3(0x20, 0xFF, 0x20);
 	for (int i = 0; i < _partitionCount; i++)
