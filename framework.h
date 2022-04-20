@@ -57,8 +57,10 @@
 #define VF_POSITION_SIMILARITY 0.03f
 
 #define VF_PARTITION_COUNT 0x80
-#define VF_PARTITION_STEP 0x20
+#define VF_PARTITION_STEP 0x40
 #define VF_ENT_PARTITIONS_MAX 0x10
+#define VF_PARTITION_SHRINK_TIME 0x40
+#define VF_PARTITION_OVERLAPSCALE 5.0f
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
@@ -205,6 +207,7 @@ VFAPI void* vfGetObject(vfHandle handle, int type);
 VFAPI void vfRenderParticles(void);
 VFAPI void vfRenderEntities(void);
 VFAPI void vfRenderBounds(void);
+VFAPI void vfRenderPartitions(void);
 
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);

@@ -107,6 +107,37 @@ typedef struct projVect
 	float mag;
 } projVect;
 
+/* MUTEX RELATED FUNCTIONS */
+static void showMutexError(const char* mName, const char* description)
+{
+	char cBuff[0xFF] = { 0 };
+	sprintf(cBuff, "Could not create new object!\n"
+		"Process is stuck!\nMUTEX:%s\nDESC:%s\n", mName,
+		description);
+
+	MessageBoxA(NULL, cBuff, "FATAL ENGINE ERROR",
+		MB_OK);
+	exit(1);
+}
+
+static inline void captureMutex(const char* errMsg)
+{
+	/* get write and draw mutex*/
+	int result;
+	result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("WriteMutex", errMsg);
+	result = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("DrawMutex", errMsg);
+	return;
+}
+
+static inline void releaseMutex(void)
+{
+	/* release draw and write mutex */
+	ReleaseMutex(_drawMutex);
+	ReleaseMutex(_writeMutex);
+}
+
 /* boundquad buffer, this buffer maps ever Bound object to a quad, which */
 /* is the Bound object's dimensions and offset translated by it's transform */
 static boundQuad* _bqBuffer;
@@ -165,13 +196,27 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 	int pBuff[0x4][2];
 	for (int i = 0; i < 0x4; i++)
 	{
-		pBuff[i][0] = (int)(bq->verts[i].x / _partitionSize);
-		pBuff[i][1] = (int)(bq->verts[i].y / _partitionSize);
+		/* get each vertex but scale them out from average */
+		/* to overstep each partition (intentional) */
+		float centerOffsetX = bq->verts[i].x - bq->average.x;
+		float centerOffsetY = bq->verts[i].y - bq->average.y;
+		float posXScaled = bq->average.x + 
+			(centerOffsetX * VF_PARTITION_OVERLAPSCALE);
+		float posYScaled = bq->average.y +
+			(centerOffsetY * VF_PARTITION_OVERLAPSCALE);
+
+		/* get partition coordinates */
+		float partPosX = posXScaled / (float)_partitionSize;
+		float partPosY = posYScaled / (float)_partitionSize;
+		
+		/* assign coordinates */
+		pBuff[i][0] = (int)floorf(partPosX);
+		pBuff[i][1] = (int)floorf(partPosY);
 	}
 
 	/* create bounding box around boundQuad */
-	int minPartX = pBuff[0][0], maxPartX = pBuff[0][0];
-	int minPartY = pBuff[0][1], maxPartY = pBuff[0][1];
+	int minPartX = pBuff[0][0]; int maxPartX = pBuff[0][0];
+	int minPartY = pBuff[0][1]; int maxPartY = pBuff[0][1];
 
 	/* loop to find min/max */
 	for (int i = 0; i < 0x4; i++)
@@ -183,7 +228,9 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 	}
 
 	/* get all partIndexes between the given parts */
-	int range = maxPartX - minPartX; /* get range */
+	/* get range + 1, so that only one partition used will */
+	/* still be assigned */
+	int range = (maxPartX - minPartX) + 1;
 	range = min(rangeMax, range); /* clamp range */
 	*partCount = range; /* return range */
 
@@ -196,8 +243,12 @@ static inline int partCheck(boundQuad* bq, int rangeMax,
 }
 
 /* ADD TO PARTITION */
+static ULONGLONG resizeCheckTimer = 0;
 static inline void addToPartition(boundQuad* bq, int x, int y)
 {
+	/* increment resize counter */
+	resizeCheckTimer++;
+
 	/* check for existing partition */
 	for (int i = 0; i < _partitionCount; i++)
 	{
@@ -212,16 +263,43 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 			part->bqIndexes = specAlloc(part->bqMemSize * sizeof(INT16));
 		}
 
+		/* if need more boundquads, allocate for it */
+		if (part->bqCount == part->bqMemSize / sizeof(INT16))
+		{
+			part->bqMemSize += VF_PARTITION_STEP;
+			part->bqIndexes = specCopy(part->bqIndexes,
+				part->bqMemSize - VF_PARTITION_STEP,
+				part->bqMemSize);
+		}
+
+		/* if shrink time, check for shrink */
+		if (resizeCheckTimer > VF_PARTITION_SHRINK_TIME &&
+			part->bqCount < (part->bqMemSize - VF_PARTITION_STEP) /
+			sizeof(INT16))
+		{
+			part->bqMemSize -= VF_PARTITION_STEP;
+			part->bqIndexes = specCopy(part->bqIndexes,
+				part->bqMemSize + VF_PARTITION_STEP,
+				part->bqMemSize);
+			puts("shrank part!");
+		}
+
 		/* add next boundquad to partition */
 		int bqIndex = bq - _bqBuffer;
 		part->bqIndexes[part->bqCount] = bqIndex;
 
 		/* return, since it's done */
+		part->bqCount++;
 		return;
 	}
 
-	/* on no partitions left, exit early */
-	if (_partitionCount == VF_PARTITION_COUNT) return;
+	/* on no partitions left, report err and exit */
+	if (_partitionCount == VF_PARTITION_COUNT)
+	{
+		MessageBoxA(NULL, "No physics partitions left!\n",
+			"CRITICAL ENGINE FAILURE", MB_OK);
+		exit(1);
+	}
 
 	/* on exit loop without adding to partition, create new partition */
 	partition* part = _partBuff + _partitionCount; /* gets next free part */
@@ -238,6 +316,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	/* add next boundquad to partition */
 	int bqIndex = bq - _bqBuffer;
 	part->bqIndexes[part->bqCount] = bqIndex;
+	part->bqCount++;
 }
 
 /* ASSIGN PARTITION */
@@ -253,8 +332,9 @@ static void assignPartition(boundQuad* bq)
 		pBuffY);
 
 	/* add bq to all given parts */
-	for (int i = 0; i < pCount; i++)
-		addToPartition(bq, pBuffX[i], pBuffY[i]);
+	for (int rows = 0; rows < pCount; rows++)
+		for (int cols = 0; cols < pCount; cols++)
+			addToPartition(bq, pBuffX[rows], pBuffY[cols]);
 }
 
 /*========================================*/
@@ -760,26 +840,87 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 /* ======== COLLISION HANDLING FUNCTION ======== */
 static inline void updateCollisions(void)
 {
-	/* GET COLLISION DATA */
-	int outCheck = 0;
+	/* capture mutex */
+	captureMutex("Partition Update Capture Failed");
+
+	/* first, clear partition buffer data */
+	_partitionCount = 0;
+	for (int i = 0; i < VF_PARTITION_COUNT; i++)
+	{
+		_partBuff[i].bqCount = 0;
+	}
+
+	/* update all partitions */
+	int boundCounter = 0;
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
-		if (outCheck >= _bCount) break;
+		/* break if boundCounter exceeded boundCount */
+		if (boundCounter > _bCount) break;
+
+		/* if bound is not used, skip */
 		if (!_bBufferField[i]) continue;
 
-		/* if bounds inactive, skip */
+		/* if bounds is not active, skip */
 		if (!_bqBuffer[i].staticData.active) continue;
 
-		int inCheck = 0;
-		for (int j = 0; j < VF_BUFFER_SIZE; j++)
-		{
-			if (inCheck >= _bCount) break;
-			if (!_bBufferField[j] || j == i) continue;
-			collisionCheck(_bqBuffer + i, _bqBuffer + j);
-			inCheck++;
-		}
+		/* assign bounds to a partition */
+		assignPartition(_bqBuffer + i);
 
-		inCheck++;
+		/* increment boundCounter*/
+		boundCounter++;
+	}
+
+	/* release mutex */
+	releaseMutex();
+
+	/*
+	puts("partitions:");
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		printf("[%d] (%d,%d) s: %d p:", i, _partBuff[i].x,
+			_partBuff[i].y, _partBuff[i].bqCount);
+		for (int j = 0; j < _partBuff[i].bqCount; j++)
+		{
+			printf("%d ", _partBuff[i].bqIndexes[j]);
+		}
+		puts("");
+	}
+	*/
+
+	/* loop all partitions */
+	for (int partIndex = 0; partIndex < _partitionCount; partIndex++)
+	{
+		/* get current physics partition */
+		partition currentPart = _partBuff[partIndex];
+
+		/* loop all boundquads within partition */
+		/* sbIndex stands for "source boundquad index" */
+		for (int sbIndex = 0; sbIndex < currentPart.bqCount; sbIndex++)
+		{
+			/* if source bounds unused, skip */
+			/* this shouldn't happen but i check anyways */
+			if (!_bBufferField[currentPart.bqIndexes[sbIndex]])
+				continue;
+
+			/* if source bounds inactive, skip */
+			if (!_bqBuffer[currentPart.bqIndexes[sbIndex]]
+				.staticData.active) continue;
+
+			/* compare source boundquad against all other boundquads */
+			/* within the partition tbIndex stands for "target bq indx" */
+			for (int tbIndex = 0; tbIndex < currentPart.bqCount; tbIndex++)
+			{
+				/* if target bound is inactive, continue */
+				if (!_bBufferField[currentPart.bqIndexes[tbIndex]]) continue;
+
+				/* if target and source are the same, continue */
+				if (sbIndex == tbIndex) continue;
+
+				/* perform collision check */
+				collisionCheck(_bqBuffer + currentPart.bqIndexes[sbIndex],
+					_bqBuffer + currentPart.bqIndexes[tbIndex]);
+			}
+		}
 	}
 
 	/* ACCUMULATE COLLISION DATA */
@@ -1194,37 +1335,6 @@ VFAPI void vfTerminate(void)
 VFAPI void vfThreadSleepTime(unsigned int miliseconds)
 {
 	_sleepTime = miliseconds;
-}
-
-/* STRUCT CREATION HELPER FUNCTIONS */
-static void showMutexError(const char* mName, const char* description)
-{
-	char cBuff[0xFF] = { 0 };
-	sprintf(cBuff, "Could not create new object!\n"
-		"Process is stuck!\nMUTEX:%s\nDESC:%s\n", mName,
-		description);
-
-	MessageBoxA(NULL, cBuff, "FATAL ENGINE ERROR",
-		MB_OK);
-	exit(1);
-}
-
-static inline void captureMutex(const char* errMsg)
-{
-	/* get write and draw mutex*/
-	int result;
-	result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
-	if (result != WAIT_OBJECT_0) showMutexError("WriteMutex", errMsg);
-	result = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
-	if (result != WAIT_OBJECT_0) showMutexError("DrawMutex", errMsg);
-	return;
-}
-
-static inline void releaseMutex(void)
-{
-	/* release draw and write mutex */
-	ReleaseMutex(_drawMutex);
-	ReleaseMutex(_writeMutex);
 }
 
 /* STRUCT CREATION FUNCTIONS */
@@ -1728,6 +1838,54 @@ VFAPI void vfRenderBounds(void)
 		bRendered++;
 	}
 	vgLineSize(1.0f);
+}
+
+VFAPI void vfRenderPartitions(void)
+{
+	/* check for framskip */
+	if (vgGetRenderSkipState()) return;
+
+	/* get mutex */
+	captureMutex("Partition Rendering Timeout");
+
+	/* set render layer*/
+	vgRenderLayer(0x10);
+
+	/* render lines */
+	vgLineSize(1.5f);
+	/* render x and y axis */
+	vgColor3(0xFF, 0x20, 0x20); vgLine(INT_MAX, 0, INT_MIN, 0);
+	vgColor3(0x20, 0x20, 0xFF); vgLine(0, INT_MAX, 0, INT_MIN, 0);
+	/* render all partition boundaries */
+	vgColor3(0x20, 0xFF, 0x20);
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		/* get partition bounding box */
+		partition renderPart = _partBuff[i];
+		int pMinX = renderPart.x * _partitionSize;
+		int pMaxX = pMinX + _partitionSize;
+		int pMinY = renderPart.y * _partitionSize;
+		int pMaxY = pMinY + _partitionSize;
+
+		vgLine(pMinX, pMinY, pMinX, pMaxY); /* left   */
+		vgLine(pMinX, pMaxY, pMaxX, pMaxY); /* top    */
+		vgLine(pMaxX, pMinY, pMaxX, pMaxY); /* right  */
+		vgLine(pMinX, pMinY, pMaxX, pMaxY); /* bottom */
+	}
+	vgLineSize(1);
+
+	/* render all partitions */
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		partition renderPart = _partBuff[i];
+		vgColor4(min(renderPart.bqCount * 0x40, 0xFF), 0x80, 0x80, 0x40);
+		vgRect(renderPart.x * _partitionSize,
+			   renderPart.y * _partitionSize,
+			_partitionSize,
+			_partitionSize);
+	}
+
+	releaseMutex();
 }
 
 /* PHYSICS RELATED FUNCTIONS */
