@@ -168,8 +168,8 @@ typedef struct vfParticle
 {
 	unsigned char layer; /* particle layer */
 
-	unsigned int birthTime; /* time of creation */
-	unsigned int lifeTime;  /* time allowed to live */
+	ULONGLONG birthTime; /* time of creation (in pticks) */
+	unsigned int lifeTime;  /* time allowed to live (in pticks) */
 
 	vgShape shape;     /* shape */
 	vgTexture texture; /* texture */

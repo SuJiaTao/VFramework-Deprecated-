@@ -1325,8 +1325,8 @@ static void updateParticles(void)
 	int updateCount = 0;
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
-		/* break if all particles checked */
-		if (updateCount == _pCount) break;
+		/* if checked all, break */
+		if (updateCount >= _pCount) break;
 
 		/* continue if particle is not used */
 		if (!_pBufferField[i]) continue;
@@ -1335,8 +1335,7 @@ static void updateParticles(void)
 		vfParticle* partRef = _pBuffer + i;
 
 		/* check if particle is too old */
-		if (partRef->birthTime + partRef->lifeTime >=
-			(unsigned int)(_tickCount - partRef->birthTime))
+		if (_tickCount > partRef->birthTime + partRef->lifeTime)
 		{
 			/* clear buffer and zero memory */
 			_pBufferField[i] = 0;
@@ -1376,6 +1375,9 @@ static void updateParticles(void)
 			partRef->behavior.tourqueAcceleration;
 		partRef->behavior.sizeVelocity +=
 			partRef->behavior.sizeAcceleration;
+
+		/* increment update count */
+		updateCount++;
 	}
 }
 
@@ -1958,7 +1960,6 @@ VFAPI void vfRenderParticles(void)
 
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
-		if (rendered >= _pCount) break;
 		if (!_pBufferField[i]) continue;
 
 		vfParticle render = _pBuffer[i];
@@ -1969,8 +1970,8 @@ VFAPI void vfRenderParticles(void)
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
 
-		vgTextureFilter(render.behavior.filter.r, render.behavior.filter.g,
-			render.behavior.filter.b, render.behavior.filter.a);
+		//vgTextureFilter(render.behavior.filter.r, render.behavior.filter.g,
+		//	render.behavior.filter.b, render.behavior.filter.a);
 
 		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
 			tFinal.rotation, tFinal.scale);
@@ -2276,7 +2277,7 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 	_pBufferField[pIndex] = 1;
 
 	/* get ref and set values */
-	vfParticle* pRef = _pbBuffer + pIndex;
+	vfParticle* pRef = _pBuffer + pIndex;
 	pRef->birthTime = _tickCount;
 	pRef->lifeTime = lifeTime;
 	pRef->layer = layer;
@@ -2304,7 +2305,7 @@ VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
 	_pBufferField[pIndex] = 1;
 
 	/* get ref and set values */
-	vfParticle* pRef = _pbBuffer + pIndex;
+	vfParticle* pRef = _pBuffer + pIndex;
 	pRef->birthTime = _tickCount;
 	pRef->lifeTime = lifeTime;
 	pRef->layer = layer;
