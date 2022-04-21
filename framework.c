@@ -930,6 +930,8 @@ static inline void updateCollisions(void)
 			exit(1);
 		}
 
+		captureMutex("Reallocating Partition Buffer");
+
 		/* free and reallocate */
 		void* temp = vAlloc(_partitionsAllocated * sizeof(partition),
 			TRUE);
@@ -939,6 +941,8 @@ static inline void updateCollisions(void)
 
 		/* clear extra requested */
 		_partitionsExtraRequested = 0;
+
+		releaseMutex();
 	}
 
 	/* check for excess partitions to free */
@@ -948,6 +952,8 @@ static inline void updateCollisions(void)
 		/* get oldsize and decrease allocation size */
 		int oldSize = _partitionsAllocated * sizeof(partition);
 		_partitionsAllocated -= VF_PART_COUNT_INCREMENT;
+
+		captureMutex("Reallocating Partition Buffer");
 
 		/* alloc new and copy over memory */
 		void* temp = vAlloc(_partitionsAllocated *
@@ -968,6 +974,8 @@ static inline void updateCollisions(void)
 		/* free and reassign */
 		vFree(_partBuff);
 		_partBuff = temp;
+
+		releaseMutex();
 	}
 
 	/* first, clear partition buffer data */
@@ -2073,6 +2081,10 @@ VFAPI void vfRenderPartitions(void)
 	/* check for framskip */
 	if (vgGetRenderSkipState()) return;
 
+	/* get draw mutex */
+	int wResult = WaitForSingleObject(_drawMutex, VF_RMUTEX_TIMEOUT);
+	if (wResult != WAIT_OBJECT_0) return; /* on fail, don't render */
+
 	/* set render layer*/
 	vgRenderLayer(0x10);
 
@@ -2117,6 +2129,8 @@ VFAPI void vfRenderPartitions(void)
 			_partitionSize,
 			_partitionSize);
 	}
+
+	ReleaseMutex(_drawMutex);
 }
 
 /* PHYSICS RELATED FUNCTIONS */
@@ -2226,7 +2240,7 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 	fprintf(file, "Bound collisions checked: %d/%d\n", _pCollisionCheckCount,
 		_bCount);
 	fprintf(file, "Partitions traversed: %d/%d\n", _pPartitionCheckCount,
-		_partitionsAllocated);
+		_partitionCount);
 	fprintf(file, "Time taken to calculate: %d ms\n",
 		_pCollisionCheckTime);
 	fflush(file);
