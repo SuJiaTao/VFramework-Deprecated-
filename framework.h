@@ -19,6 +19,7 @@
 *		- Struct related functions
 *		- Rendering functions
 *		- Physics functions
+*		- Particle functions
 *		- Data related functions
 * 
 ******************************************************************************/
@@ -67,6 +68,10 @@
 #define VF_PART_OVERLAPSCALE 1.25f
 #define VF_PART_SKIP_DAMPENER 2.5f
 #define VF_PART_SKIP_MINAGE  0x40
+
+#define VF_PBHV_MAX 0x40
+#define VF_PBHV_ERROR -1
+#define VF_PBHV_EMPTY -1
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
@@ -152,11 +157,14 @@ typedef struct vfParticleBehavior
 	vfVector velocity;
 	vfVector acceleration;
 
-	vfColor filter;
-	vfColor filterChange;
+	vfColor filterVelocity;
+	vfColor filterAcceleration;
 	
-	float tourque;
-	float tourquChange;
+	float tourqueVelocity;
+	float tourqueAcceleration;
+
+	float sizeVelocity;
+	float sizeAcceleration;
 } vfParticleBehavior;
 
 typedef struct vfParticle
@@ -249,6 +257,15 @@ VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize);
 VFAPI void vfLogPhysicsPartitionData(FILE* file);
 VFAPI void vfLogPhysicsCollisionsData(FILE* file);
+
+/* PARTICLE RELATED FUNCTIONS */
+VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
+	vfColor filterChange, vfVector velocity, vfVector acceleartion);
+VFAPI vfHandle vfCreateParticleBehaviorT(vfColor filter,
+	vfColor filterChange, vfVector velocity, vfVector acceleration,
+	vfVector tourqueChange, vfVector sizeChange);
+VFAPI vfHandle vfCreateParticleBehaviorPB(vfParticleBehavior ref);
+VFAPI void vfSetParticleBehavior(vfParticle* target, vfHandle behavior);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);

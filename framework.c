@@ -67,6 +67,9 @@ static int _tCount;
 /* PARTICLE RELATED DATA */
 static vfParticle* _pBuffer; static field* _pBufferField;
 static int _pCount;
+static vfParticleBehavior* _pbBuffer;
+static int _pbCount;
+static const vfParticleBehavior _pbEmpty = { 0 };
 
 /* BOUND RELATED DATA */
 static vfBound* _bBuffer; static field* _bBufferField;
@@ -1461,6 +1464,7 @@ VFAPI void vfInit(void)
 	_tCount = 0;
 	_bCount = 0;
 	_pCount = 0;
+	_pbCount = 0;
 	_eCount = 0;
 
 	/* init partition data */
@@ -1494,11 +1498,13 @@ VFAPI void vfInit(void)
 	_tFinalBuffer = vAlloc(sizeof(vfTransform) * VF_BUFFER_SIZE,
 		TRUE);
 
-	/* INIT PARTICLE BUFFER */
+	/* INIT PARTICLE BUFFERS */
 	_pBuffer = vAlloc(sizeof(vfParticle) * VF_BUFFER_SIZE,
 		TRUE);
 	_pBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
 		TRUE);
+	_pbBuffer = vAlloc(sizeof(vfParticleBehavior) *
+		VF_PBHV_MAX, TRUE);
 
 	/* INIT BOUND BUFFER */
 	_bBuffer = vAlloc(sizeof(vfBound) * VF_BUFFER_SIZE,
@@ -1537,6 +1543,7 @@ VFAPI void vfTerminate(void)
 	vFree(_tBuffer);
 	vFree(_bBuffer);
 	vFree(_pBuffer);
+	vFree(_pbBuffer);
 	vFree(_eBuffer);
 	vFree(_bqBuffer);
 	vFree(_tFinalBuffer);
@@ -1692,8 +1699,10 @@ VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
 	vfParticle* rParticle = _pBuffer + pIndex;
 	rParticle->layer = 0;
 	rParticle->active = TRUE;
-	rParticle->filter = vfCreateColor(255, 255, 255, 255);
 	rParticle->transform = transform;
+
+	/* clear particle behavior */
+	vfSetParticleBehavior(rParticle, VF_PBHV_EMPTY);
 
 	releaseMutex( );
 	return rParticle;
@@ -1713,10 +1722,12 @@ VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
 	/* set values */
 	vfParticle* rParticle = _pBuffer + pIndex;
 	rParticle->layer = layer;
-	rParticle->filter = vfCreateColor(255, 255, 255, 255);
 	rParticle->texture = texture;
 	rParticle->shape = shape;
 	rParticle->transform = transform;
+
+	/* clear particle behavior */
+	vfSetParticleBehavior(rParticle, VF_PBHV_EMPTY);
 
 	releaseMutex( );
 	return rParticle;
@@ -1947,8 +1958,6 @@ VFAPI void vfRenderParticles(void)
 
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
-		vgTextureFilter(render.filter.r, render.filter.g, render.filter.b,
-			render.filter.a);
 		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
 			tFinal.rotation, tFinal.scale);
 
@@ -2240,6 +2249,81 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 	fprintf(file, "Time taken to calculate: %d ms\n",
 		_pCollisionCheckTime);
 	fflush(file);
+}
+
+/* ========== PARTICLE RELATED FUNCTIONS ========== */
+VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
+	vfColor filterChange, vfVector velocity, vfVector acceleartion)
+{
+	/* if max reached, return -1 */
+	if (_pbBuffer == VF_PBHV_MAX) return VF_PBHV_ERROR;
+
+	/* get particle behavior */
+	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
+	
+	/* copy data over */
+	pbRef->filterVelocity = filter;
+	pbRef->filterAcceleration = filterChange;
+	pbRef->velocity = velocity;
+	pbRef->acceleration = pbRef->acceleration;
+
+	_pbCount++; /* increment particle behavior count */
+
+	return pbRef - _pbBuffer; /* return pbBuffer index */
+}
+
+VFAPI vfHandle vfCreateParticleBehaviorT(vfColor filter,
+	vfColor filterChange, vfVector velocity, vfVector acceleration,
+	vfVector tourqueChange, vfVector sizeChange)
+{
+	/* if max reached, return -1 */
+	if (_pbBuffer == VF_PBHV_MAX) return VF_PBHV_ERROR;
+
+	/* get particle behavior */
+	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
+
+	/* copy data over */
+	pbRef->filterVelocity = filter;
+	pbRef->filterAcceleration = filterChange;
+	pbRef->velocity = velocity;
+	pbRef->acceleration = pbRef->acceleration;
+	pbRef->tourqueVelocity = tourqueChange.x;
+	pbRef->tourqueAcceleration = tourqueChange.y;
+	pbRef->sizeVelocity = sizeChange.x;
+	pbRef->sizeAcceleration = sizeChange.y;
+
+	_pbCount++; /* increment particle behavior count */
+
+	return pbRef - _pbBuffer; /* return pbBuffer index */
+}
+
+VFAPI vfHandle vfCreateParticleBehaviorPB(vfParticleBehavior ref)
+{
+	/* if max reached, return -1 */
+	if (_pbBuffer == VF_PBHV_MAX) return VF_PBHV_ERROR;
+
+	/* get particle behavior */
+	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
+
+	/* copy data over */
+	*pbRef = ref;
+
+	_pbCount++; /* increment particle behavior count */
+
+	return pbRef - _pbBuffer; /* return pbBuffer index */
+}
+
+VFAPI void vfSetParticleBehavior(vfParticle* target, vfHandle behavior)
+{
+	/* if special empty case */
+	if (behavior == VF_PBHV_EMPTY)
+	{
+		target->behavior = _pbEmpty;
+		return;
+	}
+
+	/* else copy */
+	target->behavior = _pbBuffer[behavior];
 }
 
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
