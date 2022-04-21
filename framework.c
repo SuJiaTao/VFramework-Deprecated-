@@ -1319,7 +1319,65 @@ static inline void updatePhyiscsAges(void)
 }
 
 /* ============= INTERNAL PARTICLE UPDATE FUNCTIONS ============ */
+static void updateParticles(void)
+{
+	/* loop all particles */
+	int updateCount = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		/* break if all particles checked */
+		if (updateCount == _pCount) break;
 
+		/* continue if particle is not used */
+		if (!_pBufferField[i]) continue;
+
+		/* get particle */
+		vfParticle* partRef = _pBuffer + i;
+
+		/* check if particle is too old */
+		if (partRef->birthTime + partRef->lifeTime >=
+			(unsigned int)(_tickCount - partRef->birthTime))
+		{
+			/* clear buffer and zero memory */
+			_pBufferField[i] = 0;
+			ZeroMemory(partRef, sizeof(vfParticle));
+			
+			/* decrement count and continue */
+			_pCount--;
+			continue;
+		}
+
+		/* update all values */
+		partRef->transform.position.x +=
+			partRef->behavior.velocity.x;
+		partRef->transform.position.y +=
+			partRef->behavior.velocity.y;
+		partRef->transform.rotation +=
+			partRef->behavior.tourqueVelocity;
+		partRef->transform.scale +=
+			partRef->behavior.sizeVelocity;
+
+		/* update filter */
+		partRef->behavior.filter.r +=
+			partRef->behavior.filterChange.r;
+		partRef->behavior.filter.g +=
+			partRef->behavior.filterChange.g;
+		partRef->behavior.filter.b +=
+			partRef->behavior.filterChange.b;
+		partRef->behavior.filter.a +=
+			partRef->behavior.filterChange.a;
+
+		/* update value change values */
+		partRef->behavior.velocity.x +=
+			partRef->behavior.acceleration.x;
+		partRef->behavior.velocity.y +=
+			partRef->behavior.acceleration.y;
+		partRef->behavior.tourqueVelocity +=
+			partRef->behavior.tourqueAcceleration;
+		partRef->behavior.sizeVelocity +=
+			partRef->behavior.sizeAcceleration;
+	}
+}
 
 /* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
@@ -1419,6 +1477,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			ULONGLONG endTickCount = GetTickCount64();
 			_pUpdateTime = (int)(endTickCount - startTickCount);
+
+			/* update particles */
+			updateParticles();
 		}
 		else
 		{
@@ -1907,6 +1968,10 @@ VFAPI void vfRenderParticles(void)
 
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
+
+		vgTextureFilter(render.behavior.filter.r, render.behavior.filter.g,
+			render.behavior.filter.b, render.behavior.filter.a);
+
 		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
 			tFinal.rotation, tFinal.scale);
 
@@ -2225,6 +2290,9 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 
 	/* set behavior */
 	pRef->behavior = _pbBuffer[behavior];
+
+	/* increment particle count */
+	_pCount++;
 }
 
 VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
@@ -2250,6 +2318,9 @@ VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
 
 	/* set behavior */
 	pRef->behavior = _pbBuffer[behavior];
+
+	/* increment particle count */
+	_pCount++;
 }
 
 VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
