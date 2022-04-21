@@ -1,7 +1,7 @@
 /******************************************************************************
 * <framework.h>
 * Bailey Jia-Tao Brown
-* 2021
+* 2021/2022
 * 
 *	Header file for abstract graphics and utilites library
 *	Contents:
@@ -151,32 +151,32 @@ typedef struct vfBound
 
 typedef struct vfParticleBehavior
 {
-	unsigned int bornTime; /* creation tick count */
-	unsigned int lifeTime; /* life tick count */
+	vfVector velocity; /* initial velocity */
+	vfVector acceleration; /* change in velocity */
 
-	vfVector velocity;
-	vfVector acceleration;
-
-	vfColor filterVelocity;
-	vfColor filterAcceleration;
+	vfColor filter; /* initial filter */
+	vfColor filterChange; /* change in filter */
 	
-	float tourqueVelocity;
-	float tourqueAcceleration;
+	float tourqueVelocity; /* initial tourque */
+	float tourqueAcceleration; /* change in tourque */
 
-	float sizeVelocity;
-	float sizeAcceleration;
+	float sizeVelocity; /* change in size */
+	float sizeAcceleration; /* size change acceleration */
 } vfParticleBehavior;
 
 typedef struct vfParticle
 {
-	int active;
-	unsigned char layer;
-	vgShape shape;
-	vgTexture texture;
+	unsigned char layer; /* particle layer */
 
-	vfTransform* transform;
+	unsigned int birthTime; /* time of creation */
+	unsigned int lifeTime;  /* time allowed to live */
 
-	vfParticleBehavior behavior;
+	vgShape shape;     /* shape */
+	vgTexture texture; /* texture */
+
+	vfTransform transform; /* transform data */
+
+	vfParticleBehavior behavior; /* particle behavior */
 } vfParticle;
 
 typedef struct vfEntity
@@ -212,9 +212,6 @@ VFAPI vfTransform* vfCreateTransformp(vfTransform* parent);
 VFAPI vfBound* vfCreateBoundt(vfTransform* body);
 VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 	vfVector dimensions);
-VFAPI vfParticle* vfCreateParticlet(vfTransform* transform);
-VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
-	vgShape shape, unsigned char layer);
 VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass);
 VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
 	int moveable, int rotationLock);
@@ -259,13 +256,19 @@ VFAPI void vfLogPhysicsPartitionData(FILE* file);
 VFAPI void vfLogPhysicsCollisionsData(FILE* file);
 
 /* PARTICLE RELATED FUNCTIONS */
+VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
+	unsigned int lifeTime, unsigned char layer, vfVector position,
+	vfHandle behavior);
+VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
+	unsigned int lifeTime, unsigned char layer, vfVector position,
+	float rotation,
+	float scale, vfHandle behavior);
 VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
 	vfColor filterChange, vfVector velocity, vfVector acceleartion);
 VFAPI vfHandle vfCreateParticleBehaviorT(vfColor filter,
 	vfColor filterChange, vfVector velocity, vfVector acceleration,
 	vfVector tourqueChange, vfVector sizeChange);
 VFAPI vfHandle vfCreateParticleBehaviorPB(vfParticleBehavior ref);
-VFAPI void vfSetParticleBehavior(vfParticle* target, vfHandle behavior);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);

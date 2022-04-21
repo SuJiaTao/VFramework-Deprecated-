@@ -1,7 +1,7 @@
 /******************************************************************************
 * <framework.h>
 * Bailey Jia-Tao Brown
-* 2021
+* 2021/2022
 *
 *	Source file for abstract graphics and utilites library
 *	Contents:
@@ -9,7 +9,8 @@
 *		- Includes
 *		- Internal definitions
 *		- Internal resources
-*		- Internal functions
+*		- Internal physics functions
+*		- Internal particle functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
@@ -405,7 +406,7 @@ static void assignPartition(boundQuad* bq)
 			addToPartition(bq, pBuffX[rows], pBuffY[cols]);
 }
 
-/*========================================*/
+/*==================== PHYSICS FUNCTIONS ====================*/
 
 /* INTERNAL BOUNDQUAD CREATION FUNCTION */
 static inline boundQuad createBoundQuad(vfVector bL, vfVector tL, vfVector tR,
@@ -1317,6 +1318,9 @@ static inline void updatePhyiscsAges(void)
 	}
 }
 
+/* ============= INTERNAL PARTICLE UPDATE FUNCTIONS ============ */
+
+
 /* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
 {
@@ -1685,54 +1689,6 @@ VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 	return rBound;
 }
 
-VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
-{
-	captureMutex("Particle Creation Timeout");
-
-	/* get free spot */
-	int pIndex = findBufferSpot(_pBuffer, _pBufferField,
-		sizeof(vfParticle));
-	_pBufferField[pIndex] = 1;
-	_pCount++;
-
-	/* set values */
-	vfParticle* rParticle = _pBuffer + pIndex;
-	rParticle->layer = 0;
-	rParticle->active = TRUE;
-	rParticle->transform = transform;
-
-	/* clear particle behavior */
-	vfSetParticleBehavior(rParticle, VF_PBHV_EMPTY);
-
-	releaseMutex( );
-	return rParticle;
-}
-
-VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
-	vgShape shape, unsigned char layer)
-{
-	captureMutex("Particle creation timeout");
-
-	/* get free spot */
-	int pIndex = findBufferSpot(_pBuffer, _pBufferField,
-		sizeof(vfParticle));
-	_pBufferField[pIndex] = 1;
-	_pCount++;
-
-	/* set values */
-	vfParticle* rParticle = _pBuffer + pIndex;
-	rParticle->layer = layer;
-	rParticle->texture = texture;
-	rParticle->shape = shape;
-	rParticle->transform = transform;
-
-	/* clear particle behavior */
-	vfSetParticleBehavior(rParticle, VF_PBHV_EMPTY);
-
-	releaseMutex( );
-	return rParticle;
-}
-
 VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 {
 	vfPhysics rPhys;
@@ -1945,16 +1901,9 @@ VFAPI void vfRenderParticles(void)
 		if (!_pBufferField[i]) continue;
 
 		vfParticle render = _pBuffer[i];
-		if (!render.active) continue;
 
 		/* get FINAL transform */
-		vfTransform* rTransform = render.transform;
-
-		/* null check */
-		if (rTransform == NULL) continue;
-
-		int tIndex = rTransform - _tBuffer;
-		vfTransform tFinal = _tFinalBuffer[tIndex];
+		vfTransform tFinal = render.transform;
 
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
@@ -2252,6 +2201,57 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 }
 
 /* ========== PARTICLE RELATED FUNCTIONS ========== */
+
+VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
+	unsigned int lifeTime, unsigned char layer, vfVector position,
+	vfHandle behavior)
+{
+	/* find buffer spot and set field */
+	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
+	_pBufferField[pIndex] = 1;
+
+	/* get ref and set values */
+	vfParticle* pRef = _pbBuffer + pIndex;
+	pRef->birthTime = _tickCount;
+	pRef->lifeTime = lifeTime;
+	pRef->layer = layer;
+	pRef->shape = shape;
+	pRef->texture = texture;
+
+	/* set transform values */
+	pRef->transform.position = position;
+	pRef->transform.scale    = 1;
+	pRef->transform.rotation = 0;
+
+	/* set behavior */
+	pRef->behavior = _pbBuffer[behavior];
+}
+
+VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
+	unsigned int lifeTime, unsigned char layer, vfVector position,
+	float rotation, float scale, vfHandle behavior)
+{
+	/* find buffer spot and set field */
+	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
+	_pBufferField[pIndex] = 1;
+
+	/* get ref and set values */
+	vfParticle* pRef = _pbBuffer + pIndex;
+	pRef->birthTime = _tickCount;
+	pRef->lifeTime = lifeTime;
+	pRef->layer = layer;
+	pRef->shape = shape;
+	pRef->texture = texture;
+
+	/* set transform values */
+	pRef->transform.position = position;
+	pRef->transform.scale    = scale;
+	pRef->transform.rotation = rotation;
+
+	/* set behavior */
+	pRef->behavior = _pbBuffer[behavior];
+}
+
 VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
 	vfColor filterChange, vfVector velocity, vfVector acceleartion)
 {
@@ -2262,8 +2262,8 @@ VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
 	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
 	
 	/* copy data over */
-	pbRef->filterVelocity = filter;
-	pbRef->filterAcceleration = filterChange;
+	pbRef->filter = filter;
+	pbRef->filterChange = filterChange;
 	pbRef->velocity = velocity;
 	pbRef->acceleration = pbRef->acceleration;
 
@@ -2283,8 +2283,8 @@ VFAPI vfHandle vfCreateParticleBehaviorT(vfColor filter,
 	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
 
 	/* copy data over */
-	pbRef->filterVelocity = filter;
-	pbRef->filterAcceleration = filterChange;
+	pbRef->filter = filter;
+	pbRef->filterChange = filterChange;
 	pbRef->velocity = velocity;
 	pbRef->acceleration = pbRef->acceleration;
 	pbRef->tourqueVelocity = tourqueChange.x;
