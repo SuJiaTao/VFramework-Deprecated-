@@ -165,6 +165,7 @@ static int _partitionCount = 0;
 static int _partitionsAllocated = 0;
 static int _partitionSize = 0;
 static int _partitionsExtraRequested = 0;
+static int _partitionsMax = 0;
 
 /* GET BQ VEL MAG (gets speed heuristic for a given bq) */
 static float getBQVelMag(boundQuad* bq)
@@ -887,7 +888,7 @@ static inline void updateCollisions(void)
 		_partitionsAllocated += (allocCount * VF_PART_COUNT_INCREMENT);
 
 		/* if max part size reached, report error */
-		if (_partitionsAllocated >= VF_PART_COUNT_MAXIMUM)
+		if (_partitionsAllocated >= _partitionsMax)
 		{
 			MessageBoxA(NULL, "Maximum amount of partitions allocated!",
 				"CRITICAL ENGINE FAILURE!", MB_OK);
@@ -1430,6 +1431,7 @@ VFAPI void vfInit(void)
 		sizeof(partition) * _partitionsAllocated);
 	_partitionSize = VF_PART_SIZE_DEFAULT;
 	_partitionsExtraRequested = 0;
+	_partitionsMax = VF_PART_COUNT_MAXIMUM;
 
 	/* init mutexs */
 	_writeMutex = CreateMutexW(NULL, FALSE, NULL);
@@ -2129,6 +2131,11 @@ VFAPI int vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 VFAPI void vfSetPartitionSize(int size)
 {
 	_partitionSize = size;
+}
+
+VFAPI void vfSetPartitionMaxCount(int value)
+{
+	_partitionsMax = value;
 }
 
 VFAPI void vfGetPhysicsTickCount(long long* ticks)

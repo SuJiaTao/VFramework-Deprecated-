@@ -224,6 +224,7 @@ VFAPI void vfSetUpdateCallback(vfEntity* entity, ENTUPDCALLBACK callback);
 VFAPI int  vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 	int priorityRequest);
 VFAPI void vfSetPartitionSize(int size);
+VFAPI void vfSetPartitionMaxCount(int value);
 VFAPI void vfGetPhysicsTickCount(long long* ticks);
 VFAPI int  vfGetPhysicsUpdateTime(void);
 VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount, 
