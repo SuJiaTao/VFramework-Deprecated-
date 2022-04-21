@@ -59,10 +59,6 @@ static int _killRecieved; /* kill recieved signal */
 
 /* internal buffers */
 
-/* BIG AUXILLARY BUFFER */
-static BYTE _mTank[VF_MEMTANK_SIZE + VF_MEMTANK_EXCESS];
-static BYTE _mTField[VF_MEMTANK_FIELDSIZE];
-
 /* TRANSFORM RELATED DATA */
 static vfTransform* _tBuffer; static field* _tBufferField;
 static vfTransform* _tFinalBuffer;
@@ -2358,86 +2354,4 @@ VFAPI int vfGetObjectCount(int type)
 	}
 
 	return count;
-}
-
-/* ALLOCATING AND FREEING FUNCTION */
-static int ensureFreeMTBlock(int startIndex, int size)
-{
-	for (int i = 0; i < size; i++)
-	{
-		/* check for contig, if !, ret 0 */
-		if (_mTField[startIndex + i] == 1) return 0;
-	}
-	return 1;
-}
-
-static int findFreeMTIndex(int size)
-{
-	for (int i = 0; i < VF_MEMTANK_FIELDSIZE; i++)
-	{
-		/* on find free spot, ret index */
-		if (_mTField[i] == 0 && ensureFreeMTBlock(i, size))
-			return i;
-	}
-
-	/* on fail, ret -1 */
-	return -1;
-}
-
-VFAPI void* vfMTAlloc(int size, int zero)
-{
-	/* bad size condition */
-	if (size < 0 || size / VF_MEMTANK_INTERVAL > VF_BUFFER_SIZE) 
-		return NULL;
-
-	/* find lowest multiple of interval which satisfies size */
-	float fsize = (float)size;
-	int sizeActual = (int)ceilf(fsize / VF_MEMTANK_INTERVAL);
-
-	/* check for the impossible */
-	if (sizeActual * VF_MEMTANK_INTERVAL < size) sizeActual++;
-
-	/* find index */
-	int index = findFreeMTIndex(sizeActual);
-
-	/* fail condition */
-	if (index == -1) return NULL;
-
-	/* fill field */
-	for (int i = 0; i < sizeActual; i++)
-		_mTField[index + i] = 1;
-
-	/* check zero and return ptr */
-	if (zero) ZeroMemory(_mTank + index, 
-		sizeActual * VF_MEMTANK_INTERVAL);
-	return _mTank + index;
-}
-
-VFAPI int vfMTFree(void* ptr, int size, int zero)
-{
-	/* cast ptr */
-	BYTE* cPtr = ptr;
-
-	/* check for bad ptr */
-	if (cPtr == NULL) return 0;
-
-	/* check more for bad ptr */
-	if (cPtr < _mTank || cPtr > _mTank + VF_MEMTANK_SIZE) return 0;
-
-	/* find lowest multiple of 8 which satisfies size */
-	float fsize = (float)size;
-	int sizeActual = (int)ceilf(fsize / VF_MEMTANK_INTERVAL);
-
-	/* check for the impossible */
-	if (sizeActual * VF_MEMTANK_INTERVAL < size) sizeActual++;
-
-	/* free field */
-	int startIndex = ((char*)ptr - _mTank) / VF_MEMTANK_INTERVAL;
-	for (int i = 0; i < sizeActual; i++)
-		_mTField[startIndex + i] = 0;
-
-	/* zero */
-	if (zero) ZeroMemory(ptr, sizeActual * VF_MEMTANK_INTERVAL);
-
-	return 1;
 }

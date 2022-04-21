@@ -144,15 +144,31 @@ typedef struct vfBound
 	struct vfEntity* entity;
 } vfBound;
 
+typedef struct vfParticleBehavior
+{
+	unsigned int bornTime; /* creation tick count */
+	unsigned int lifeTime; /* life tick count */
+
+	vfVector velocity;
+	vfVector acceleration;
+
+	vfColor filter;
+	vfColor filterChange;
+	
+	float tourque;
+	float tourquChange;
+} vfParticleBehavior;
+
 typedef struct vfParticle
 {
 	int active;
 	unsigned char layer;
 	vgShape shape;
 	vgTexture texture;
-	vfColor filter;
 
 	vfTransform* transform;
+
+	vfParticleBehavior behavior;
 } vfParticle;
 
 typedef struct vfEntity
@@ -238,7 +254,5 @@ VFAPI void vfLogPhysicsCollisionsData(FILE* file);
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
 VFAPI int vfGetBufferField(void* field, int size, int type);
 VFAPI int vfGetObjectCount(int type);
-VFAPI void* vfMTAlloc(int size, int zero);
-VFAPI int vfMTFree(void* ptr, int size, int zero);
 
 #endif 
