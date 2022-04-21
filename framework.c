@@ -1970,8 +1970,8 @@ VFAPI void vfRenderParticles(void)
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
 
-		//vgTextureFilter(render.behavior.filter.r, render.behavior.filter.g,
-		//	render.behavior.filter.b, render.behavior.filter.a);
+		vgTextureFilter(render.behavior.filter.r, render.behavior.filter.g,
+			render.behavior.filter.b, render.behavior.filter.a);
 
 		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
 			tFinal.rotation, tFinal.scale);
