@@ -7,11 +7,9 @@
 *	Contents:
 *		- Preprocessor definitions
 *		- Includes
-*		- Internal buffer structure
-*		- Internal buffer struct related functions
 *		- Internal definitions
-*		- Internal functions
 *		- Internal resources
+*		- Internal functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
@@ -113,7 +111,38 @@ typedef struct projVect
 	float mag;
 } projVect;
 
-/* MUTEX RELATED FUNCTIONS */
+/* ========== INTERNAL ALLOC FUNCTIONS ======== */
+static void* vAlloc(size_t allocSize, int zero)
+{
+	/* setup allocation flags */
+	int allocFlags = 0; if (zero) allocFlags = HEAP_ZERO_MEMORY;
+	void* checkAlloc = HeapAlloc(_heap, allocFlags,
+		allocSize);
+
+	/* if null, report err and exit */
+	if (checkAlloc == NULL)
+	{
+		MessageBoxA(NULL, "Failed to allocate more memory!",
+			"CRITICAL FAILURE!", MB_OK);
+		exit(0);
+	}
+
+	/* return ptr*/
+	return checkAlloc;
+}
+
+static void vFree(void* toFree)
+{
+	BOOL result = HeapFree(_heap, 0, toFree);
+	if (!result)
+	{
+		MessageBoxA(NULL, "Failed to free memory!\n",
+			"CRITICAL FAILURE!", MB_OK);
+		return;
+	}
+}
+
+/* ========== MUTEX RELATED FUNCTIONS ========== */
 static void showMutexError(const char* mName, const char* description)
 {
 	char cBuff[0xFF] = { 0 };
@@ -261,7 +290,7 @@ static inline void ensurePartitionSize(partition* part)
 	{
 		/* decrement and free */
 		part->bqBuffSize -= VF_PART_STEP;
-		HeapFree(_heap, 0, part->bqIndexes);
+		vFree(part->bqIndexes);
 
 		/* if size is 0, set buffer to null */
 		if (part->bqBuffSize == 0)
@@ -272,8 +301,8 @@ static inline void ensurePartitionSize(partition* part)
 		else /* else, realloc */
 		{
 			/* realloc */
-			part->bqIndexes = HeapAlloc(_heap, 0,
-				part->bqBuffSize * sizeof(UINT16));
+			part->bqIndexes = vAlloc(part->bqBuffSize * sizeof(UINT16),
+				FALSE);
 
 			/* reset overfit age */
 			part->overfitAge = 0;
@@ -288,18 +317,24 @@ static inline void ensurePartitionSize(partition* part)
 	{
 		/* increment and alloc */
 		part->bqBuffSize += VF_PART_STEP;
-		part->bqIndexes = HeapAlloc(_heap, 0,
-			part->bqBuffSize * sizeof(UINT16));
+		part->bqIndexes = vAlloc(part->bqBuffSize * 
+			sizeof(UINT16), FALSE);
 	}
 
 	/* if size is not big enough */
 	if (part->bqBuffSize <= part->bqCount)
 	{
-		/* increment step and realloc */
+		/* increment step and alloc new */
 		int oldSize = part->bqBuffSize;
 		part->bqBuffSize += VF_PART_STEP;
-		part->bqIndexes = HeapReAlloc(_heap, 0,
-			part->bqIndexes, part->bqBuffSize * sizeof(UINT16));
+		void* temp = vAlloc(part->bqBuffSize * sizeof(UINT16), FALSE);
+
+		/* copy data and free old pointer */
+		memcpy(temp, part->bqIndexes, oldSize * sizeof(UINT16));
+		vFree(part->bqIndexes);
+
+		/* reassign new ptr */
+		part->bqIndexes = temp;
 	}
 }
 
@@ -896,10 +931,10 @@ static inline void updateCollisions(void)
 		}
 
 		/* free and reallocate */
-		void* temp = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-			_partitionsAllocated * sizeof(partition));
+		void* temp = vAlloc(_partitionsAllocated * sizeof(partition),
+			TRUE);
 		memcpy(temp, _partBuff, oldSize);
-		HeapFree(_heap, 0, _partBuff);
+		vFree(_partBuff);
 		_partBuff = temp;
 
 		/* clear extra requested */
@@ -915,8 +950,8 @@ static inline void updateCollisions(void)
 		_partitionsAllocated -= VF_PART_COUNT_INCREMENT;
 
 		/* alloc new and copy over memory */
-		void* temp = HeapAlloc(_heap, 0, _partitionsAllocated *
-			sizeof(partition));
+		void* temp = vAlloc(_partitionsAllocated *
+			sizeof(partition), FALSE);
 		memcpy(temp, _partBuff, _partitionsAllocated * sizeof(partition));
 
 		/* free excess memory */
@@ -926,12 +961,12 @@ static inline void updateCollisions(void)
 			if (_partBuff[index].bqIndexes != NULL &&
 				_partBuff[index].bqBuffSize != 0)
 			{
-				HeapFree(_heap, 0, _partBuff[index].bqIndexes);
+				vFree(_partBuff[index].bqIndexes);
 			}
 		}
 
 		/* free and reassign */
-		HeapFree(_heap, 0, _partBuff);
+		vFree(_partBuff);
 		_partBuff = temp;
 	}
 
@@ -1427,8 +1462,8 @@ VFAPI void vfInit(void)
 	/* init partition data */
 	_partitionsAllocated = VF_PART_COUNT_INCREMENT;
 	_partitionCount = 0;
-	_partBuff = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(partition) * _partitionsAllocated);
+	_partBuff = vAlloc(sizeof(partition) * _partitionsAllocated,
+		TRUE);
 	_partitionSize = VF_PART_SIZE_DEFAULT;
 	_partitionsExtraRequested = 0;
 	_partitionsMax = VF_PART_COUNT_MAXIMUM;
@@ -1446,36 +1481,36 @@ VFAPI void vfInit(void)
 	}
 
 	/* INIT TRANSFORM BUFFER */
-	_tBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(vfTransform) * VF_BUFFER_SIZE);
-	_tBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(field) * VF_BUFFER_SIZE);
+	_tBuffer = vAlloc(sizeof(vfTransform) * VF_BUFFER_SIZE,
+		TRUE);
+	_tBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
+		TRUE);
 
 	/* INIT FINAL TRANSFORM BUFFER */
-	_tFinalBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(vfTransform) * VF_BUFFER_SIZE);
+	_tFinalBuffer = vAlloc(sizeof(vfTransform) * VF_BUFFER_SIZE,
+		TRUE);
 
 	/* INIT PARTICLE BUFFER */
-	_pBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(vfParticle) * VF_BUFFER_SIZE);
-	_pBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(field) * VF_BUFFER_SIZE);
+	_pBuffer = vAlloc(sizeof(vfParticle) * VF_BUFFER_SIZE,
+		TRUE);
+	_pBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
+		TRUE);
 
 	/* INIT BOUND BUFFER */
-	_bBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(vfBound) * VF_BUFFER_SIZE);
-	_bBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(field) * VF_BUFFER_SIZE);
+	_bBuffer = vAlloc(sizeof(vfBound) * VF_BUFFER_SIZE,
+		TRUE);
+	_bBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
+		TRUE);
 
 	/* INIT BOUNDQUAD BUFFER */
-	_bqBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(boundQuad) * VF_BUFFER_SIZE);
+	_bqBuffer = vAlloc(sizeof(boundQuad) * VF_BUFFER_SIZE,
+		TRUE);
 
 	/* INIT ENTITY BUFFER */
-	_eBuffer = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(vfEntity) * VF_BUFFER_SIZE);
-	_eBufferField = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
-		sizeof(field) * VF_BUFFER_SIZE);
+	_eBuffer = vAlloc(sizeof(vfEntity) * VF_BUFFER_SIZE,
+		TRUE);
+	_eBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
+		TRUE);
 
 	/* init module main thread */
 	_killSignal   = FALSE;
@@ -1495,26 +1530,26 @@ VFAPI void vfTerminate(void)
 	WaitForSingleObject(_killMutex, 0xFF);
 
 	/* free all buffers */
-	HeapFree(_heap, 0, _tBuffer);
-	HeapFree(_heap, 0, _bBuffer);
-	HeapFree(_heap, 0, _pBuffer);
-	HeapFree(_heap, 0, _eBuffer);
-	HeapFree(_heap, 0, _bqBuffer);
-	HeapFree(_heap, 0, _tFinalBuffer);
+	vFree(_tBuffer);
+	vFree(_bBuffer);
+	vFree(_pBuffer);
+	vFree(_eBuffer);
+	vFree(_bqBuffer);
+	vFree(_tFinalBuffer);
 
 	/* free all buffer fields */
-	HeapFree(_heap, 0, _tBufferField);
-	HeapFree(_heap, 0, _bBufferField);
-	HeapFree(_heap, 0, _pBufferField);
-	HeapFree(_heap, 0, _eBufferField);
+	vFree(_tBufferField);
+	vFree(_bBufferField);
+	vFree(_pBufferField);
+	vFree(_eBufferField);
 
 	/* free all partitions */
 	for (int i = 0; i < _partitionsAllocated; i++)
 	{
 		if (_partBuff[i].bqIndexes != NULL)
-			HeapFree(_heap, 0, _partBuff[i].bqIndexes);
+			vFree(_partBuff[i].bqIndexes);
 	}
-	HeapFree(_heap, 0, _partBuff);
+	vFree(_partBuff);
 
 	/* close handles */
 	CloseHandle(_writeMutex);
