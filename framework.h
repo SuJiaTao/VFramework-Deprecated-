@@ -56,11 +56,15 @@
 #define VF_VECTOR_SIMILARITY_THRESOLD 0.15f
 #define VF_POSITION_SIMILARITY 0.03f
 
-#define VF_PART_COUNT 0x100
+#define VF_PART_SIZE_DEFAULT 0x5000
+#define VF_PART_COUNT_INCREMENT 0x100
+#define VF_PART_INCREASE_THRESOLD 0x20
+#define VF_PART_DECREASE_THRESOLD 0x40
+#define VF_PART_COUNT_MAXIMUM 0x1000
 #define VF_PART_STEP 0x40
 #define VF_ENT_PART_MAX 0x10
 #define VF_PART_OVERAGE_TIME 0x80
-#define VF_PART_OVERLAPSCALE 1.5f
+#define VF_PART_OVERLAPSCALE 1.25f
 #define VF_PART_SKIP_DAMPENER 2.5f
 #define VF_PART_SKIP_MINAGE  0x40
 
@@ -226,7 +230,8 @@ VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount,
 	int* partCheckCount);
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize);
-VFAPI void vfLogPhysicsPartitions(FILE* file);
+VFAPI void vfLogPhysicsPartitionData(FILE* file);
+VFAPI void vfLogPhysicsCollisionsData(FILE* file);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);

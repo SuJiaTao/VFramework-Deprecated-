@@ -54,6 +54,7 @@ static int _pEnabled; /* physics toggle */
 static int _pUpdateTime = 0; /* physics update time taken */
 static int _pCollisionCheckCount = 0; /* amount of col checks */
 static int _pPartitionCheckCount = 0; /* amount of part jmps */
+static int _pCollisionCheckTime  = 0;
 
 static int _killSignal;   /* thread kill signal */
 static int _killRecieved; /* kill recieved signal */
@@ -150,18 +151,20 @@ static boundQuad* _bqBuffer;
 /* SPACE PARTITION BUFFERS */
 typedef struct partition
 {
-	UINT16 overfitAge; /* time with excess memory allocated */
-	INT16  x; /* partition x */
-	INT16  y; /* partition y */
-	UINT16   bqCount; /* boundquad count */
+	UINT16  overfitAge; /* time with excess memory allocated */
+	INT16   x; /* partition x */
+	INT16   y; /* partition y */
+	UINT16  bqCount; /* boundquad count */
 	UINT16  bqBuffSize; /* allocated buffer size */
 	UINT16* bqIndexes; /* dynamic array */
-	float  velSum; /* sum of object velocities */
+	float   velSum; /* sum of object velocities */
 } partition;
 
-static partition _partBuff[VF_PART_COUNT];
+static partition* _partBuff;
 static int _partitionCount = 0;
-static int _partitionSize = 10000;
+static int _partitionsAllocated = 0;
+static int _partitionSize = 0;
+static int _partitionsExtraRequested = 0;
 
 /* GET BQ VEL MAG (gets speed heuristic for a given bq) */
 static float getBQVelMag(boundQuad* bq)
@@ -324,12 +327,11 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		return;
 	}
 
-	/* on no partitions left, report err and exit */
-	if (_partitionCount == VF_PART_COUNT)
+	/* on no partitions left, request more partitions and return */
+	if (_partitionCount == _partitionsAllocated)
 	{
-		MessageBoxA(NULL, "No physics partitions left!\n",
-			"CRITICAL ENGINE FAILURE", MB_OK);
-		exit(1);
+		_partitionsExtraRequested++;
+		return;
 	}
 
 	/* on exit loop without adding to partition, create new partition */
@@ -871,9 +873,70 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 /* ======== COLLISION HANDLING FUNCTION ======== */
 static inline void updateCollisions(void)
 {
+	/* check if extra partitions have been requested */
+	/* or if partition limit will soon be reached */
+	if (_partitionsExtraRequested || 
+		_partitionCount > _partitionsAllocated - VF_PART_INCREASE_THRESOLD)
+	{
+		/* get highest multiple to allocate extra */
+		int allocCount = (int)ceilf((float)(_partitionsExtraRequested)
+			/ (float)(VF_PART_COUNT_INCREMENT));
+
+		/* increment alloc count */
+		int oldSize = _partitionsAllocated * sizeof(partition);
+		_partitionsAllocated += (allocCount * VF_PART_COUNT_INCREMENT);
+
+		/* if max part size reached, report error */
+		if (_partitionsAllocated >= VF_PART_COUNT_MAXIMUM)
+		{
+			MessageBoxA(NULL, "Maximum amount of partitions allocated!",
+				"CRITICAL ENGINE FAILURE!", MB_OK);
+			exit(1);
+		}
+
+		/* free and reallocate */
+		void* temp = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
+			_partitionsAllocated * sizeof(partition));
+		memcpy(temp, _partBuff, oldSize);
+		HeapFree(_heap, 0, _partBuff);
+		_partBuff = temp;
+
+		/* clear extra requested */
+		_partitionsExtraRequested = 0;
+	}
+
+	/* check for excess partitions to free */
+	if (_partitionCount < _partitionsAllocated - VF_PART_COUNT_INCREMENT
+		- VF_PART_DECREASE_THRESOLD)
+	{
+		/* get oldsize and decrease allocation size */
+		int oldSize = _partitionsAllocated * sizeof(partition);
+		_partitionsAllocated -= VF_PART_COUNT_INCREMENT;
+
+		/* alloc new and copy over memory */
+		void* temp = HeapAlloc(_heap, 0, _partitionsAllocated *
+			sizeof(partition));
+		memcpy(temp, _partBuff, _partitionsAllocated * sizeof(partition));
+
+		/* free excess memory */
+		for (int i = 0; i < VF_PART_COUNT_INCREMENT; i++)
+		{
+			int index = _partitionsAllocated + i;
+			if (_partBuff[index].bqIndexes != NULL &&
+				_partBuff[index].bqBuffSize != 0)
+			{
+				HeapFree(_heap, 0, _partBuff[index].bqIndexes);
+			}
+		}
+
+		/* free and reassign */
+		HeapFree(_heap, 0, _partBuff);
+		_partBuff = temp;
+	}
+
 	/* first, clear partition buffer data */
 	_partitionCount = 0;
-	for (int i = 0; i < VF_PART_COUNT; i++)
+	for (int i = 0; i < _partitionsAllocated; i++)
 	{
 		/* clear partition members */
 		_partBuff[i].velSum  = 0;
@@ -1280,7 +1343,10 @@ static DWORD WINAPI vfMain(void* params)
 			updateEntityVelocities();
 
 			/* handle all collisions */
+			ULONGLONG startTime = GetTickCount64();
 			updateCollisions();
+			ULONGLONG endTime = GetTickCount64();
+			_pCollisionCheckTime = (int)(endTime - startTime);
 
 			/* handle velocity changes from collisions */
 			updateCollisionVelocities();
@@ -1311,6 +1377,7 @@ static DWORD WINAPI vfMain(void* params)
 		{
 			_pCollisionCheckCount = -1;
 			_pPartitionCheckCount = -1;
+			_pCollisionCheckTime = -1;
 			_pUpdateTime = -1;
 		}
 
@@ -1355,6 +1422,14 @@ VFAPI void vfInit(void)
 	_bCount = 0;
 	_pCount = 0;
 	_eCount = 0;
+
+	/* init partition data */
+	_partitionsAllocated = VF_PART_COUNT_INCREMENT;
+	_partitionCount = 0;
+	_partBuff = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
+		sizeof(partition) * _partitionsAllocated);
+	_partitionSize = VF_PART_SIZE_DEFAULT;
+	_partitionsExtraRequested = 0;
 
 	/* init mutexs */
 	_writeMutex = CreateMutexW(NULL, FALSE, NULL);
@@ -1430,6 +1505,14 @@ VFAPI void vfTerminate(void)
 	HeapFree(_heap, 0, _bBufferField);
 	HeapFree(_heap, 0, _pBufferField);
 	HeapFree(_heap, 0, _eBufferField);
+
+	/* free all partitions */
+	for (int i = 0; i < _partitionsAllocated; i++)
+	{
+		if (_partBuff[i].bqIndexes != NULL)
+			HeapFree(_heap, 0, _partBuff[i].bqIndexes);
+	}
+	HeapFree(_heap, 0, _partBuff);
 
 	/* close handles */
 	CloseHandle(_writeMutex);
@@ -2065,11 +2148,11 @@ VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount,
 	*partCheckCount = _pPartitionCheckCount;
 }
 
-VFAPI void vfLogPhysicsPartitions(FILE* file)
+VFAPI void vfLogPhysicsPartitionData(FILE* file)
 {
 	fprintf(file, "========== TICKCOUNT: %08lld ==========\n", _tickCount);
-	fprintf(file, "Part count: %d\nPart size: %d\n",
-		_partitionCount, _partitionSize);
+	fprintf(file, "Part count: %d/%d\nPart size: %d\n",
+		_partitionCount, _partitionsAllocated, _partitionSize);
 	for (int i = 0; i < _partitionCount; i++)
 	{
 		/* print general data */
@@ -2090,6 +2173,20 @@ VFAPI void vfLogPhysicsPartitions(FILE* file)
 		fprintf(file, "\n");
 	}
 	/* flush buffer */
+	fflush(file);
+}
+
+VFAPI void vfLogPhysicsCollisionData(FILE* file)
+{
+	fprintf(file, "========== TICKCOUNT: %08lld ==========\n", _tickCount);
+	fprintf(file, "Part count: %d/%d\nPart size: %d\n",
+		_partitionCount, _partitionsAllocated, _partitionSize);
+	fprintf(file, "Bound collisions checked: %d/%d\n", _pCollisionCheckCount,
+		_bCount);
+	fprintf(file, "Partitions traversed: %d/%d\n", _pPartitionCheckCount,
+		_partitionsAllocated);
+	fprintf(file, "Time taken to calculate: %d ms\n",
+		_pCollisionCheckTime);
 	fflush(file);
 }
 
