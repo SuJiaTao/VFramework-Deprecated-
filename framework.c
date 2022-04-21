@@ -146,7 +146,7 @@ static void vFree(void* toFree)
 static void showMutexError(const char* mName, const char* description)
 {
 	char cBuff[0xFF] = { 0 };
-	sprintf(cBuff, "Could not create new object!\n"
+	sprintf(cBuff, "Failed to capture mutex!\n"
 		"Process is stuck!\nMUTEX:%s\nDESC:%s\n", mName,
 		description);
 
