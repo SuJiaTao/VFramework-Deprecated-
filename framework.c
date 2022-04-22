@@ -2102,7 +2102,7 @@ VFAPI void vfRenderPartitions(void)
 	if (wResult != WAIT_OBJECT_0) return; /* on fail, don't render */
 
 	/* set render layer*/
-	vgRenderLayer(0x10);
+	vgRenderLayer(VF_PART_RENDERLAYER);
 
 	/* render lines */
 	vgLineSize(1.5f);
