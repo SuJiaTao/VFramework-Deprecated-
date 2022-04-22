@@ -83,7 +83,7 @@ static int _eCount;
 /* STATIC CALLBACK DATA */
 static STATUPDCALLBACK _sCallBuff[VF_STATICCALLBACK_MAX];
 static int _sCallSize;
-static long long _tickCount = 0;
+static vfTickCount _tickCount = 0;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -1319,6 +1319,11 @@ static inline void updatePhyiscsAges(void)
 }
 
 /* ============= INTERNAL PARTICLE UPDATE FUNCTIONS ============ */
+static inline vfVector vectorAdd(vfVector vect1, vfVector vect2)
+{
+	return VECT(vect1.x + vect2.x, vect1.y + vect2.y);
+}
+
 static void updateParticles(void)
 {
 	/* loop all particles */
@@ -1335,7 +1340,7 @@ static void updateParticles(void)
 		vfParticle* partRef = _pBuffer + i;
 
 		/* check if particle is too old */
-		if (_tickCount > partRef->birthTime + partRef->lifeTime)
+		if (partRef->lifeAge > partRef->lifeTime)
 		{
 			/* clear buffer and zero memory */
 			_pBufferField[i] = 0;
@@ -1346,35 +1351,19 @@ static void updateParticles(void)
 			continue;
 		}
 
+		/* call behavior callbacks (if exists) */
+		if (partRef->behavior.updateBehavior != NULL)
+			partRef->behavior.updateBehavior(&(partRef->behavior),
+				partRef->lifeAge);
+
 		/* update all values */
-		partRef->transform.position.x +=
-			partRef->behavior.velocity.x;
-		partRef->transform.position.y +=
-			partRef->behavior.velocity.y;
-		partRef->transform.rotation +=
-			partRef->behavior.tourqueVelocity;
-		partRef->transform.scale +=
-			partRef->behavior.sizeVelocity;
-
-		/* update filter */
-		partRef->behavior.filter.r +=
-			partRef->behavior.filterChange.r;
-		partRef->behavior.filter.g +=
-			partRef->behavior.filterChange.g;
-		partRef->behavior.filter.b +=
-			partRef->behavior.filterChange.b;
-		partRef->behavior.filter.a +=
-			partRef->behavior.filterChange.a;
-
-		/* update value change values */
-		partRef->behavior.velocity.x +=
-			partRef->behavior.acceleration.x;
-		partRef->behavior.velocity.y +=
-			partRef->behavior.acceleration.y;
-		partRef->behavior.tourqueVelocity +=
-			partRef->behavior.tourqueAcceleration;
-		partRef->behavior.sizeVelocity +=
-			partRef->behavior.sizeAcceleration;
+		partRef->transform.position = vectorAdd(partRef->transform.position,
+			partRef->behavior.velocity);
+		partRef->transform.rotation += partRef->behavior.torque;
+		partRef->transform.scale += partRef->behavior.sizeChange;
+		
+		/* increase particle age */
+		partRef->lifeAge++;
 
 		/* increment update count */
 		updateCount++;
@@ -1571,7 +1560,7 @@ VFAPI void vfInit(void)
 	_pBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
 		TRUE);
 	_pbBuffer = vAlloc(sizeof(vfParticleBehavior) *
-		VF_PBHV_MAX, TRUE);
+		VF_PB_MAX, TRUE);
 
 	/* INIT BOUND BUFFER */
 	_bBuffer = vAlloc(sizeof(vfBound) * VF_BUFFER_SIZE,
@@ -1658,7 +1647,7 @@ VFAPI vfColor vfCreateColor(int r, int g, int b, int a)
 	return rCol;
 }
 
-VFAPI vfTransform* vfCreateTransformv(vfVector vector)
+VFAPI vfTransform* vfCreateTransformV(vfVector vector)
 {
 	/* find transform buffer spot */
 	int tIndex = findBufferSpot(_tBuffer, _tBufferField,
@@ -1676,7 +1665,7 @@ VFAPI vfTransform* vfCreateTransformv(vfVector vector)
 	return rTransform;
 }
 
-VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
+VFAPI vfTransform* vfCreateTransformA(vfVector vector, float rotation,
 	float scale)
 {
 
@@ -1696,7 +1685,7 @@ VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
 	return rTransform;
 }
 
-VFAPI vfTransform* vfCreateTransformp(vfTransform* parent)
+VFAPI vfTransform* vfCreateTransformP(vfTransform* parent)
 {
 
 	/* find transform buffer spot */
@@ -1712,7 +1701,7 @@ VFAPI vfTransform* vfCreateTransformp(vfTransform* parent)
 	return rTransform;
 }
 
-VFAPI vfBound* vfCreateBoundt(vfTransform* body)
+VFAPI vfBound* vfCreateBoundT(vfTransform* body)
 {
 
 	/* find bound buffer spot */
@@ -1730,7 +1719,7 @@ VFAPI vfBound* vfCreateBoundt(vfTransform* body)
 	return rBound;
 }
 
-VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
+VFAPI vfBound* vfCreateBoundA(vfTransform* body, vfVector position,
 	vfVector dimensions)
 {
 
@@ -1768,7 +1757,7 @@ VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 	return rPhys;
 }
 
-VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
+VFAPI vfPhysics vfCreatePhysicsA(float bounciness, float drag, float mass,
 	int moveable, int rotationLock)
 {
 	vfPhysics rPhys;
@@ -1800,8 +1789,8 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	/* get return entity and init values */
 	vfEntity* rEnt = _eBuffer + eIndex;
 
-	rEnt->transform = vfCreateTransforma(vfCreateVector(0, 0), 0, 1);
-	rEnt->bounds = vfCreateBounda(rEnt->transform, boundPosition,
+	rEnt->transform = vfCreateTransformA(vfCreateVector(0, 0), 0, 1);
+	rEnt->bounds = vfCreateBoundA(rEnt->transform, boundPosition,
 		boundDimensions);
 	rEnt->layer = layer;
 	rEnt->filter = vfCreateColor(255, 255, 255, 255);
@@ -1970,8 +1959,8 @@ VFAPI void vfRenderParticles(void)
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
 
-		vgTextureFilter(render.behavior.filter.r, render.behavior.filter.g,
-			render.behavior.filter.b, render.behavior.filter.a);
+		vgTextureFilter(render.filter.r, render.filter.g,
+			render.filter.b, render.filter.a);
 
 		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
 			tFinal.rotation, tFinal.scale);
@@ -2207,7 +2196,7 @@ VFAPI void vfSetPartitionMaxCount(int value)
 	_partitionsMax = value;
 }
 
-VFAPI void vfGetPhysicsTickCount(long long* ticks)
+VFAPI void vfGetPhysicsTickCount(vfTickCount* ticks)
 {
 	*ticks = _tickCount;
 }
@@ -2278,7 +2267,6 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 
 	/* get ref and set values */
 	vfParticle* pRef = _pBuffer + pIndex;
-	pRef->birthTime = _tickCount;
 	pRef->lifeTime = lifeTime;
 	pRef->layer = layer;
 	pRef->shape = shape;
@@ -2296,9 +2284,9 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 	_pCount++;
 }
 
-VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
-	unsigned int lifeTime, unsigned char layer, vfVector position,
-	float rotation, float scale, vfHandle behavior)
+VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
+	vfLifeTime lifeTime, vfLayer layer, vfTransform transform,
+	vfHandle behavior)
 {
 	/* find buffer spot and set field */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
@@ -2306,16 +2294,13 @@ VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
 
 	/* get ref and set values */
 	vfParticle* pRef = _pBuffer + pIndex;
-	pRef->birthTime = _tickCount;
 	pRef->lifeTime = lifeTime;
 	pRef->layer = layer;
 	pRef->shape = shape;
 	pRef->texture = texture;
 
 	/* set transform values */
-	pRef->transform.position = position;
-	pRef->transform.scale    = scale;
-	pRef->transform.rotation = rotation;
+	pRef->transform = transform;
 
 	/* set behavior */
 	pRef->behavior = _pbBuffer[behavior];
@@ -2324,78 +2309,33 @@ VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
 	_pCount++;
 }
 
-VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
-	vfColor filterChange, vfVector velocity, vfVector acceleartion)
+VFAPI vfHandle vfCreateParticleBehavior(PARTUPDCALLBACK behavior)
 {
-	/* if max reached, return -1 */
-	if (_pbBuffer == VF_PBHV_MAX) return VF_PBHV_ERROR;
+	/* check for full */
+	if (_pbCount >= VF_PB_MAX) return VF_PB_ERROR;
 
-	/* get particle behavior */
+	/* get particle behavior ref and set data */
 	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
-	
-	/* copy data over */
-	pbRef->filter = filter;
-	pbRef->filterChange = filterChange;
-	pbRef->velocity = velocity;
-	pbRef->acceleration = pbRef->acceleration;
+	ZeroMemory(pbRef, sizeof(vfParticleBehavior));
+	pbRef->updateBehavior = behavior;
 
-	_pbCount++; /* increment particle behavior count */
+	_pbCount++; /* increment behavior count */
 
-	return pbRef - _pbBuffer; /* return pbBuffer index */
+	return pbRef - _pbBuffer; /* return index */
 }
 
-VFAPI vfHandle vfCreateParticleBehaviorT(vfColor filter,
-	vfColor filterChange, vfVector velocity, vfVector acceleration,
-	vfVector tourqueChange, vfVector sizeChange)
+VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference)
 {
-	/* if max reached, return -1 */
-	if (_pbBuffer == VF_PBHV_MAX) return VF_PBHV_ERROR;
+	/* check for full */
+	if (_pbCount >= VF_PB_MAX) return VF_PB_ERROR;
 
-	/* get particle behavior */
+	/* get particle behavior ref and set data */
 	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
+	*pbRef = reference;
 
-	/* copy data over */
-	pbRef->filter = filter;
-	pbRef->filterChange = filterChange;
-	pbRef->velocity = velocity;
-	pbRef->acceleration = pbRef->acceleration;
-	pbRef->tourqueVelocity = tourqueChange.x;
-	pbRef->tourqueAcceleration = tourqueChange.y;
-	pbRef->sizeVelocity = sizeChange.x;
-	pbRef->sizeAcceleration = sizeChange.y;
+	_pbCount++; /* increment behavior count */
 
-	_pbCount++; /* increment particle behavior count */
-
-	return pbRef - _pbBuffer; /* return pbBuffer index */
-}
-
-VFAPI vfHandle vfCreateParticleBehaviorPB(vfParticleBehavior ref)
-{
-	/* if max reached, return -1 */
-	if (_pbBuffer == VF_PBHV_MAX) return VF_PBHV_ERROR;
-
-	/* get particle behavior */
-	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
-
-	/* copy data over */
-	*pbRef = ref;
-
-	_pbCount++; /* increment particle behavior count */
-
-	return pbRef - _pbBuffer; /* return pbBuffer index */
-}
-
-VFAPI void vfSetParticleBehavior(vfParticle* target, vfHandle behavior)
-{
-	/* if special empty case */
-	if (behavior == VF_PBHV_EMPTY)
-	{
-		target->behavior = _pbEmpty;
-		return;
-	}
-
-	/* else copy */
-	target->behavior = _pbBuffer[behavior];
+	return pbRef - _pbBuffer; /* return index */
 }
 
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,

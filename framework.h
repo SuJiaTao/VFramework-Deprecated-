@@ -10,6 +10,7 @@
 *		- API definition
 *		- Includes
 *		- Definitions
+*		- Typedefs
 *		- Structs
 *		- Module initialization function
 *		- Module termination function
@@ -39,6 +40,7 @@
 
 /* INCLUDES */
 #include <graphics.h> /* Graphics library */
+#include <stdint.h>   /* Int Sizes */
 
 /* DEFINITIONS */
 #define VF_MAX_CHILDREN 0x10
@@ -69,9 +71,9 @@
 #define VF_PART_SKIP_DAMPENER 2.5f
 #define VF_PART_SKIP_MINAGE  0x40
 
-#define VF_PBHV_MAX 0x40
-#define VF_PBHV_ERROR -1
-#define VF_PBHV_EMPTY -1
+#define VF_PB_MAX 0x40
+#define VF_PB_ERROR -1
+#define VF_PB_EMPTY -1
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
@@ -93,14 +95,22 @@
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
-#define PHYSA(b, d, m, mov, rLock) vfCreatePhysicsa(b, d, m, mov, rLock)
+#define PHYSA(b, d, m, mov, rLock) vfCreatePhysicsA(b, d, m, mov, rLock)
+
+/* TYPEDEFS */
+typedef uint8_t  vfFlag;
+typedef uint8_t  vfLayer;
+typedef uint32_t vfHandle;
+typedef uint64_t vfTickCount;
+typedef uint16_t vfLifeTime;
+
+typedef void (*ENTCOLCALLBACK) (struct vfEntity* source, struct vfEntity* target);
+typedef void (*ENTUPDCALLBACK) (struct vfEntity* source);
+typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
+typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* behavior,
+	vfLifeTime particleAge);
 
 /* STRUCTURE DEFINITIONS */
-typedef unsigned int vfHandle;
-typedef void (*ENTCOLCALLBACK)(struct vfEntity* source, struct vfEntity* target);
-typedef void (*ENTUPDCALLBACK)(struct vfEntity* source);
-typedef void (*STATUPDCALLBACK)(long long tickCount);
-
 typedef struct vfVector
 {
 	float x;
@@ -126,9 +136,9 @@ typedef struct vfTransform
 
 typedef struct vfPhysics
 {
-	int active;
-	int moveable;
-	int rotationLock;
+	vfFlag active       : 1;
+	vfFlag moveable     : 1;
+	vfFlag rotationLock : 1;
 	float bounciness;
 	float drag;
 	float mass;
@@ -136,12 +146,12 @@ typedef struct vfPhysics
 	vfVector velocity;
 	float tourque;
 
-	unsigned long long age;
+	vfTickCount age;
 } vfPhysics;
 
 typedef struct vfBound
 {
-	int active;
+	vfFlag active;
 	vfTransform* body;
 	vfVector position;
 	vfVector dimensions;
@@ -151,28 +161,24 @@ typedef struct vfBound
 
 typedef struct vfParticleBehavior
 {
-	vfVector velocity; /* initial velocity */
-	vfVector acceleration; /* change in velocity */
+	vfVector velocity;     /* initial velocity */
+	vfColor  filterChange; /* initial filterChange */
+	float    torque;       /* initial torque */
+	float    sizeChange;   /* initial sizeChange */
 
-	vfColor filter; /* initial filter */
-	vfColor filterChange; /* change in filter */
-	
-	float tourqueVelocity; /* initial tourque */
-	float tourqueAcceleration; /* change in tourque */
-
-	float sizeVelocity; /* change in size */
-	float sizeAcceleration; /* size change acceleration */
+	PARTUPDCALLBACK updateBehavior; /* called every update */
 } vfParticleBehavior;
 
 typedef struct vfParticle
 {
-	unsigned char layer; /* particle layer */
+	vfLayer layer; /* particle layer */
 
-	ULONGLONG birthTime; /* time of creation (in pticks) */
-	unsigned int lifeTime;  /* time allowed to live (in pticks) */
+	vfLifeTime lifeTime;  /* time allowed to live (in pticks) */
+	vfLifeTime lifeAge;   /* time particle has existed (int pticks) */
 
-	vgShape shape;     /* shape */
+	vgShape shape;     /* shape   */
 	vgTexture texture; /* texture */
+	vfColor filter;    /* filter  */
 
 	vfTransform transform; /* transform data */
 
@@ -181,8 +187,8 @@ typedef struct vfParticle
 
 typedef struct vfEntity
 {
-	int active;
-	unsigned char layer;
+	vfFlag active;
+	vfLayer layer;
 	vgTexture texture;
 	vgShape shape;
 	vfColor filter;
@@ -205,17 +211,17 @@ VFAPI void vfThreadSleepTime(unsigned int miliseconds);
 /* STRUCT CREATION FUNCTIONS */
 VFAPI vfVector vfCreateVector(float x, float y);
 VFAPI vfColor vfCreateColor(int r, int g, int b, int a);
-VFAPI vfTransform* vfCreateTransformv(vfVector vector);
-VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
+VFAPI vfTransform* vfCreateTransformV(vfVector vector);
+VFAPI vfTransform* vfCreateTransformA(vfVector vector, float rotation,
 	float scale);
-VFAPI vfTransform* vfCreateTransformp(vfTransform* parent);
-VFAPI vfBound* vfCreateBoundt(vfTransform* body);
-VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
+VFAPI vfTransform* vfCreateTransformP(vfTransform* parent);
+VFAPI vfBound* vfCreateBoundT(vfTransform* body);
+VFAPI vfBound* vfCreateBoundA(vfTransform* body, vfVector position,
 	vfVector dimensions);
 VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass);
-VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
+VFAPI vfPhysics vfCreatePhysicsA(float bounciness, float drag, float mass,
 	int moveable, int rotationLock);
-VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
+VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 	vgTexture texture, vfPhysics physics, vfVector boundPosition, 
 	vfVector boundDimensions);
 
@@ -246,7 +252,7 @@ VFAPI int  vfSetUpdateCallbackStatic(STATUPDCALLBACK callback,
 	int priorityRequest);
 VFAPI void vfSetPartitionSize(int size);
 VFAPI void vfSetPartitionMaxCount(int value);
-VFAPI void vfGetPhysicsTickCount(long long* ticks);
+VFAPI void vfGetPhysicsTickCount(vfTickCount* ticks);
 VFAPI int  vfGetPhysicsUpdateTime(void);
 VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount, 
 	int* partCheckCount);
@@ -257,18 +263,13 @@ VFAPI void vfLogPhysicsCollisionsData(FILE* file);
 
 /* PARTICLE RELATED FUNCTIONS */
 VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
-	unsigned int lifeTime, unsigned char layer, vfVector position,
+	vfLifeTime lifeTime, vfLayer layer, vfVector position,
 	vfHandle behavior);
-VFAPI void vfCreateParticlea(vgShape shape, vgTexture texture,
-	unsigned int lifeTime, unsigned char layer, vfVector position,
-	float rotation,
-	float scale, vfHandle behavior);
-VFAPI vfHandle vfCreateParticleBehavior(vfColor filter,
-	vfColor filterChange, vfVector velocity, vfVector acceleartion);
-VFAPI vfHandle vfCreateParticleBehaviorT(vfColor filter,
-	vfColor filterChange, vfVector velocity, vfVector acceleration,
-	vfVector tourqueChange, vfVector sizeChange);
-VFAPI vfHandle vfCreateParticleBehaviorPB(vfParticleBehavior ref);
+VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
+	vfLifeTime lifeTime, vfLayer layer, vfTransform transform,
+	vfHandle behavior);
+VFAPI vfHandle vfCreateParticleBehavior(PARTUPDCALLBACK behavior);
+VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI int vfGetBuffer(void* buffer, int size, int type);
