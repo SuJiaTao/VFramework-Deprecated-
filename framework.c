@@ -1943,6 +1943,38 @@ VFAPI void* vfGetObject(vfHandle handle, int type)
 }
 
 /* RENDERING FUNCTIONS */
+static void renderParticleAlphaGroup(int low, int high)
+{
+	int checkCount = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		/* if checked all particles, break */
+		if (checkCount >= _pCount) break;
+
+		if (!_pBufferField[i]) continue;
+		checkCount++;
+		vfParticle render = _pBuffer[i];
+
+		/* get FINAL transform */
+		vfTransform tFinal = render.transform;
+
+		/* if filter alpha is 0, skip render */
+		if (render.filter.a == 0) continue;
+
+		/* if alpha does not satisfy range, continue */
+		if (render.filter.a < low)  continue;
+		if (render.filter.a > high) continue;
+
+		vgRenderLayer(render.layer);
+		vgUseTexture(render.texture);
+
+		vgTextureFilter(render.filter.r, render.filter.g,
+			render.filter.b, render.filter.a);
+
+		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
+			tFinal.rotation, tFinal.scale);
+	}
+}
 
 VFAPI void vfRenderParticles(void)
 {
@@ -1954,30 +1986,16 @@ VFAPI void vfRenderParticles(void)
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
 		"Particle render timout");
 
-	for (int i = 0; i < VF_BUFFER_SIZE; i++)
-	{
-		if (!_pBufferField[i]) continue;
+	/* RENDER 6 ALPHA GROUPS */
+	renderParticleAlphaGroup(0xC0, 0xFF);
+	renderParticleAlphaGroup(0x80, 0xC0);
+	renderParticleAlphaGroup(0x40, 0x80);
+	renderParticleAlphaGroup(0x20, 0x40);
+	renderParticleAlphaGroup(0x10, 0x20);
+	renderParticleAlphaGroup(0x00, 0x10);
 
-		vfParticle render = _pBuffer[i];
-
-		/* get FINAL transform */
-		vfTransform tFinal = render.transform;
-
-		/* if filter alpha is 0, skip render */
-		if (render.filter.a == 0) continue;
-
-		vgRenderLayer(render.layer);
-		vgUseTexture(render.texture);
-
-		vgTextureFilter(render.filter.r, render.filter.g,
-			render.filter.b, render.filter.a);
-
-		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
-			tFinal.rotation, tFinal.scale);
-
-		vgTextureFilterReset();
-		vgRenderLayer(0);
-	}
+	vgTextureFilterReset();
+	vgRenderLayer(0);
 
 	/* release mutex */
 	ReleaseMutex(_drawMutex);
