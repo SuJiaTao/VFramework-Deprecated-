@@ -1339,7 +1339,10 @@ static void updateParticles(void)
 		vfParticle* partRef = _pBuffer + i;
 
 		/* check if particle is too old */
-		if (partRef->lifeAge > partRef->lifeTime)
+		/* OR if particle is unseeable  */
+		if (partRef->lifeAge > partRef->lifeTime ||
+			!vgCheckIfViewable(partRef->transform.position.x,
+				partRef->transform.position.y, VF_PARTICLE_DESTROYEXTRA))
 		{
 			/* clear buffer and zero memory */
 			_pBufferField[i] = 0;
@@ -1965,6 +1968,10 @@ static void renderParticleAlphaGroup(int low, int high)
 		if (render.filter.a < low)  continue;
 		if (render.filter.a > high) continue;
 
+		/* if particle is out of viewable zone, continue */
+		if (!vgCheckIfViewable(render.transform.position.x,
+			render.transform.position.y, VF_PARTICLE_CULLEXTRA)) continue;
+
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
 
@@ -1989,10 +1996,10 @@ VFAPI void vfRenderParticles(void)
 	/* RENDER 6 ALPHA GROUPS */
 	renderParticleAlphaGroup(0xC0, 0xFF);
 	renderParticleAlphaGroup(0x80, 0xC0);
-	renderParticleAlphaGroup(0x40, 0x80);
+	renderParticleAlphaGroup(0x60, 0x80);
+	renderParticleAlphaGroup(0x40, 0x60);
 	renderParticleAlphaGroup(0x20, 0x40);
-	renderParticleAlphaGroup(0x10, 0x20);
-	renderParticleAlphaGroup(0x00, 0x10);
+	renderParticleAlphaGroup(0x00, 0x20);
 
 	vgTextureFilterReset();
 	vgRenderLayer(0);
