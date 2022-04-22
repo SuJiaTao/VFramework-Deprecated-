@@ -70,7 +70,6 @@ static vfParticle* _pBuffer; static field* _pBufferField;
 static int _pCount;
 static vfParticleBehavior* _pbBuffer;
 static int _pbCount;
-static const vfParticleBehavior _pbEmpty = { 0 };
 
 /* BOUND RELATED DATA */
 static vfBound* _bBuffer; static field* _bBufferField;
@@ -1352,7 +1351,8 @@ static void updateParticles(void)
 		}
 
 		/* call behavior callbacks (if exists) */
-		if (partRef->behavior.updateBehavior != NULL)
+		if (partRef->behavior.updateBehavior != NULL &&
+			partRef->behavior.updateBehavior != VF_PB_ERROR)
 			partRef->behavior.updateBehavior(&(partRef->behavior),
 				partRef->lifeAge);
 

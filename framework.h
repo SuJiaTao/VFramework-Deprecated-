@@ -73,7 +73,6 @@
 
 #define VF_PB_MAX 0x40
 #define VF_PB_ERROR -1
-#define VF_PB_EMPTY -1
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
