@@ -73,6 +73,7 @@
 
 #define VF_PB_MAX 0x40
 #define VF_PB_ERROR -1
+#define VF_PB_NO_BEHAVIOR VF_PB_ERROR
 
 #define VF_OBJ_TRANSFORM 0x10
 #define VF_OBJ_BOUND 0x20
@@ -88,6 +89,9 @@
 
 #define VECT(x, y) vfCreateVector(x, y)
 #define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
+#define COLORA(r, g, b, a) vfCreateColor(r, g, b, a)
+#define COLOR_OPAQUE vfCreateColor(255, 255, 255, 255)
+#define COLOR_TRANSPARENT vfCreateColor(255, 255, 255, 0)
 #define PHYS(b, d, m) vfCreatePhysics(b, d, m)
 #define PHYSA(b, d, m, mov, rLock) vfCreatePhysicsA(b, d, m, mov, rLock)
 
@@ -102,7 +106,7 @@ typedef void (*ENTCOLCALLBACK) (struct vfEntity* source, struct vfEntity* target
 typedef void (*ENTUPDCALLBACK) (struct vfEntity* source);
 typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
 typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* behavior,
-	vfLifeTime particleAge);
+	struct vfTransform* particleTransform, vfLifeTime particleAge);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -257,11 +261,11 @@ VFAPI void vfLogPhysicsCollisionsData(FILE* file);
 
 /* PARTICLE RELATED FUNCTIONS */
 VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
-	vfLifeTime lifeTime, vfLayer layer, vfVector position,
-	vfHandle behavior);
+	vfColor filter, vfLifeTime lifeTime, vfLayer layer, 
+	vfVector position, vfHandle behavior);
 VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
-	vfLifeTime lifeTime, vfLayer layer, vfTransform transform,
-	vfHandle behavior);
+	vfColor filter, vfLifeTime lifeTime, vfLayer layer, 
+	vfTransform transform, vfHandle behavior);
 VFAPI vfHandle vfCreateParticleBehavior(PARTUPDCALLBACK behavior);
 VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference);
 

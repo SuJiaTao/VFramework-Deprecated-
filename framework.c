@@ -1354,7 +1354,7 @@ static void updateParticles(void)
 		if (partRef->behavior.updateBehavior != NULL &&
 			partRef->behavior.updateBehavior != VF_PB_ERROR)
 			partRef->behavior.updateBehavior(&(partRef->behavior),
-				partRef->lifeAge);
+				&(partRef->transform), partRef->lifeAge);
 
 		/* update all values */
 		partRef->transform.position = vectorAdd(partRef->transform.position,
@@ -1362,6 +1362,15 @@ static void updateParticles(void)
 		partRef->transform.rotation += partRef->behavior.torque;
 		partRef->transform.scale += partRef->behavior.sizeChange;
 		
+		/* update filter values and clamp */
+		vfColor cInitial = partRef->filter;
+		vfColor cChange = partRef->behavior.filterChange;
+		int nextR = max(0, min(255, cInitial.r + cChange.r));
+		int nextG = max(0, min(255, cInitial.g + cChange.g));
+		int nextB = max(0, min(255, cInitial.b + cChange.b));
+		int nextA = max(0, min(255, cInitial.a + cChange.a));
+		partRef->filter = COLORA(nextR, nextG, nextB, nextA);
+
 		/* increase particle age */
 		partRef->lifeAge++;
 
@@ -1945,8 +1954,6 @@ VFAPI void vfRenderParticles(void)
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
 		"Particle render timout");
 
-	int rendered = 0;
-
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
 		if (!_pBufferField[i]) continue;
@@ -1955,6 +1962,9 @@ VFAPI void vfRenderParticles(void)
 
 		/* get FINAL transform */
 		vfTransform tFinal = render.transform;
+
+		/* if filter alpha is 0, skip render */
+		if (render.filter.a == 0) continue;
 
 		vgRenderLayer(render.layer);
 		vgUseTexture(render.texture);
@@ -1967,9 +1977,6 @@ VFAPI void vfRenderParticles(void)
 
 		vgTextureFilterReset();
 		vgRenderLayer(0);
-
-		/* increment render count */
-		rendered++;
 	}
 
 	/* release mutex */
@@ -2258,8 +2265,8 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 /* ========== PARTICLE RELATED FUNCTIONS ========== */
 
 VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
-	unsigned int lifeTime, unsigned char layer, vfVector position,
-	vfHandle behavior)
+	vfColor filter, vfLifeTime lifeTime, vfLayer layer,
+	vfVector position, vfHandle behavior)
 {
 	/* find buffer spot and set field */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
@@ -2271,6 +2278,7 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 	pRef->layer = layer;
 	pRef->shape = shape;
 	pRef->texture = texture;
+	pRef->filter = filter;
 
 	/* set transform values */
 	pRef->transform.position = position;
@@ -2278,15 +2286,16 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 	pRef->transform.rotation = 0;
 
 	/* set behavior */
-	pRef->behavior = _pbBuffer[behavior];
+	if (behavior != VF_PB_ERROR)
+		pRef->behavior = _pbBuffer[behavior];
 
 	/* increment particle count */
 	_pCount++;
 }
 
 VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
-	vfLifeTime lifeTime, vfLayer layer, vfTransform transform,
-	vfHandle behavior)
+	vfColor filter, vfLifeTime lifeTime, vfLayer layer,
+	vfTransform transform, vfHandle behavior)
 {
 	/* find buffer spot and set field */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
@@ -2298,12 +2307,14 @@ VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
 	pRef->layer = layer;
 	pRef->shape = shape;
 	pRef->texture = texture;
+	pRef->filter = filter;
 
 	/* set transform values */
 	pRef->transform = transform;
 
 	/* set behavior */
-	pRef->behavior = _pbBuffer[behavior];
+	if (behavior != VF_PB_ERROR)
+		pRef->behavior = _pbBuffer[behavior];
 
 	/* increment particle count */
 	_pCount++;
