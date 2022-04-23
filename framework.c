@@ -2159,8 +2159,14 @@ VFAPI void vfRenderPartitions(void)
 	vgColor3(0x20, 0xFF, 0x20);
 	for (int i = 0; i < _partitionCount; i++)
 	{
-		/* get partition bounding box */
+		/* get partition */
 		partition renderPart = _partBuff[i];
+
+		/* if out of bounds, don't render */
+		if (!vgCheckIfViewable(renderPart.x * _partitionSize,
+			renderPart.y * _partitionSize, 0)) continue;
+
+		/* get partition bounding box */
 		int pMinX = renderPart.x * _partitionSize;
 		int pMaxX = pMinX + _partitionSize;
 		int pMinY = renderPart.y * _partitionSize;
