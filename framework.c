@@ -2417,76 +2417,52 @@ VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 }
 
 /* DATA RELATED FUNCTIONS */
-VFAPI int vfGetBuffer(void* buffer, int size, int type)
+VFAPI void* vfGetBuffer(int type)
 {
-	/* bad size check */
-	if (size < 0) return 0;
-
-	/* select buffer to read from */
-	unsigned char* pbuff;
+	/* return buffer point based on type */
 	switch (type)
 	{
 	case VF_BUFF_TRANSFORM:
-		pbuff = (BYTE*)_tBuffer;
-		break;
+		return _tBuffer;
 
 	case VF_BUFF_BOUND:
-		pbuff = (BYTE*)_bBuffer;
-		break;
+		return _bBuffer;
 
 	case VF_BUFF_PARTICLE:
-		pbuff = (BYTE*)_pBuffer;
-		break;
+		return _pBuffer;
 
 	case VF_BUFF_ENTITY:
-		pbuff = (BYTE*)_eBuffer;
-		break;
+		return _eBuffer;
+
+	case VF_BUFF_PARTITION:
+		return _partBuff;
 	
 	/* fail condition */
 	default:
-		return 0;
-		break;
+		return NULL;
 	}
-
-	/* write to user buffer */
-	memcpy(buffer, pbuff, size);
-	return 1;
 }
 
-VFAPI int vfGetBufferField(void* field, int size, int type)
+VFAPI void* vfGetBufferField(int type)
 {
-	/* bad size check */
-	if (size < 0) return 0;
-
-	/* select buffer to read from */
-	unsigned char* pbuff;
+	/* return field ptr (if exists) */
 	switch (type)
 	{
 	case VF_BUFF_TRANSFORM:
-		pbuff = _tBufferField;
-		break;
+		return _tBufferField;
 
 	case VF_BUFF_BOUND:
-		pbuff = _bBufferField;
-		break;
+		return _bBufferField;
 
 	case VF_BUFF_PARTICLE:
-		pbuff = _pBufferField;
-		break;
+		return _pBufferField;
 
 	case VF_BUFF_ENTITY:
-		pbuff = _eBufferField;
-		break;
+		return _eBufferField;
 
-		/* fail condition */
 	default:
-		return 0;
-		break;
+		return NULL;
 	}
-
-	/* write to user buffer */
-	memcpy(field, pbuff, size);
-	return 1;
 }
 
 VFAPI int vfGetObjectCount(int type)

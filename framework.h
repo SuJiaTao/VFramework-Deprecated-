@@ -84,10 +84,11 @@
 #define VF_OBJ_PARTICLE 0x30
 #define VF_OBJ_ENTITY 0x40
 
-#define VF_BUFF_TRANSFORM 0x100
-#define VF_BUFF_BOUND 0x200
-#define VF_BUFF_PARTICLE 0x300
-#define VF_BUFF_ENTITY 0x400
+#define VF_BUFF_TRANSFORM 0x1
+#define VF_BUFF_BOUND     0x2
+#define VF_BUFF_PARTICLE  0x3
+#define VF_BUFF_ENTITY    0x4
+#define VF_BUFF_PARTITION 0x5
 
 #define VF_STATICCALLBACK_MAX 0x20
 
@@ -275,8 +276,8 @@ VFAPI vfHandle vfCreateParticleBehavior(PARTUPDCALLBACK behavior);
 VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference);
 
 /* DATA RELATED FUNCTIONS */
-VFAPI int vfGetBuffer(void* buffer, int size, int type);
-VFAPI int vfGetBufferField(void* field, int size, int type);
-VFAPI int vfGetObjectCount(int type);
+VFAPI void* vfGetBuffer(int type);
+VFAPI void* vfGetBufferField(int type);
+VFAPI int   vfGetObjectCount(int type);
 
 #endif 
