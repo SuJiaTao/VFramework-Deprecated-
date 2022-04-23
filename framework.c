@@ -1,7 +1,7 @@
 /******************************************************************************
 * <framework.h>
 * Bailey Jia-Tao Brown
-* 2021
+* 2021/2022
 *
 *	Source file for abstract graphics and utilites library
 *	Contents:
@@ -9,7 +9,8 @@
 *		- Includes
 *		- Internal definitions
 *		- Internal resources
-*		- Internal functions
+*		- Internal physics functions
+*		- Internal particle functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
@@ -59,10 +60,6 @@ static int _killRecieved; /* kill recieved signal */
 
 /* internal buffers */
 
-/* BIG AUXILLARY BUFFER */
-static BYTE _mTank[VF_MEMTANK_SIZE + VF_MEMTANK_EXCESS];
-static BYTE _mTField[VF_MEMTANK_FIELDSIZE];
-
 /* TRANSFORM RELATED DATA */
 static vfTransform* _tBuffer; static field* _tBufferField;
 static vfTransform* _tFinalBuffer;
@@ -71,6 +68,8 @@ static int _tCount;
 /* PARTICLE RELATED DATA */
 static vfParticle* _pBuffer; static field* _pBufferField;
 static int _pCount;
+static vfParticleBehavior* _pbBuffer;
+static int _pbCount;
 
 /* BOUND RELATED DATA */
 static vfBound* _bBuffer; static field* _bBufferField;
@@ -83,7 +82,7 @@ static int _eCount;
 /* STATIC CALLBACK DATA */
 static STATUPDCALLBACK _sCallBuff[VF_STATICCALLBACK_MAX];
 static int _sCallSize;
-static long long _tickCount = 0;
+static vfTickCount _tickCount = 0;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -406,7 +405,7 @@ static void assignPartition(boundQuad* bq)
 			addToPartition(bq, pBuffX[rows], pBuffY[cols]);
 }
 
-/*========================================*/
+/*==================== PHYSICS FUNCTIONS ====================*/
 
 /* INTERNAL BOUNDQUAD CREATION FUNCTION */
 static inline boundQuad createBoundQuad(vfVector bL, vfVector tL, vfVector tR,
@@ -1318,6 +1317,71 @@ static inline void updatePhyiscsAges(void)
 	}
 }
 
+/* ============= INTERNAL PARTICLE UPDATE FUNCTIONS ============ */
+static inline vfVector vectorAdd(vfVector vect1, vfVector vect2)
+{
+	return VECT(vect1.x + vect2.x, vect1.y + vect2.y);
+}
+
+static void updateParticles(void)
+{
+	/* loop all particles */
+	int updateCount = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		/* if checked all, break */
+		if (updateCount >= _pCount) break;
+
+		/* continue if particle is not used */
+		if (!_pBufferField[i]) continue;
+
+		/* get particle */
+		vfParticle* partRef = _pBuffer + i;
+
+		/* check if particle is too old */
+		/* OR if particle is unseeable  */
+		if (partRef->lifeAge > partRef->lifeTime ||
+			!vgCheckIfViewable(partRef->transform.position.x,
+				partRef->transform.position.y, VF_PARTICLE_DESTROYEXTRA))
+		{
+			/* clear buffer and zero memory */
+			_pBufferField[i] = 0;
+			ZeroMemory(partRef, sizeof(vfParticle));
+			
+			/* decrement count and continue */
+			_pCount--;
+			continue;
+		}
+
+		/* call behavior callbacks (if exists) */
+		if (partRef->behavior.updateBehavior != NULL &&
+			partRef->behavior.updateBehavior != VF_PB_ERROR)
+			partRef->behavior.updateBehavior(&(partRef->behavior),
+				partRef->lifeAge);
+
+		/* update all values */
+		partRef->transform.position = vectorAdd(partRef->transform.position,
+			partRef->behavior.velocity);
+		partRef->transform.rotation += partRef->behavior.torque;
+		partRef->transform.scale += partRef->behavior.sizeChange;
+		
+		/* update filter values and clamp */
+		vfColor cInitial = partRef->filter;
+		vfColor cChange = partRef->behavior.filterChange;
+		int nextR = max(0, min(255, cInitial.r + cChange.r));
+		int nextG = max(0, min(255, cInitial.g + cChange.g));
+		int nextB = max(0, min(255, cInitial.b + cChange.b));
+		int nextA = max(0, min(255, cInitial.a + cChange.a));
+		partRef->filter = COLORA(nextR, nextG, nextB, nextA);
+
+		/* increase particle age */
+		partRef->lifeAge++;
+
+		/* increment update count */
+		updateCount++;
+	}
+}
+
 /* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
 {
@@ -1416,6 +1480,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			ULONGLONG endTickCount = GetTickCount64();
 			_pUpdateTime = (int)(endTickCount - startTickCount);
+
+			/* update particles */
+			updateParticles();
 		}
 		else
 		{
@@ -1465,6 +1532,7 @@ VFAPI void vfInit(void)
 	_tCount = 0;
 	_bCount = 0;
 	_pCount = 0;
+	_pbCount = 0;
 	_eCount = 0;
 
 	/* init partition data */
@@ -1498,11 +1566,13 @@ VFAPI void vfInit(void)
 	_tFinalBuffer = vAlloc(sizeof(vfTransform) * VF_BUFFER_SIZE,
 		TRUE);
 
-	/* INIT PARTICLE BUFFER */
+	/* INIT PARTICLE BUFFERS */
 	_pBuffer = vAlloc(sizeof(vfParticle) * VF_BUFFER_SIZE,
 		TRUE);
 	_pBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
 		TRUE);
+	_pbBuffer = vAlloc(sizeof(vfParticleBehavior) *
+		VF_PB_MAX, TRUE);
 
 	/* INIT BOUND BUFFER */
 	_bBuffer = vAlloc(sizeof(vfBound) * VF_BUFFER_SIZE,
@@ -1541,6 +1611,7 @@ VFAPI void vfTerminate(void)
 	vFree(_tBuffer);
 	vFree(_bBuffer);
 	vFree(_pBuffer);
+	vFree(_pbBuffer);
 	vFree(_eBuffer);
 	vFree(_bqBuffer);
 	vFree(_tFinalBuffer);
@@ -1588,7 +1659,7 @@ VFAPI vfColor vfCreateColor(int r, int g, int b, int a)
 	return rCol;
 }
 
-VFAPI vfTransform* vfCreateTransformv(vfVector vector)
+VFAPI vfTransform* vfCreateTransformV(vfVector vector)
 {
 	/* find transform buffer spot */
 	int tIndex = findBufferSpot(_tBuffer, _tBufferField,
@@ -1606,7 +1677,7 @@ VFAPI vfTransform* vfCreateTransformv(vfVector vector)
 	return rTransform;
 }
 
-VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
+VFAPI vfTransform* vfCreateTransformA(vfVector vector, float rotation,
 	float scale)
 {
 
@@ -1626,7 +1697,7 @@ VFAPI vfTransform* vfCreateTransforma(vfVector vector, float rotation,
 	return rTransform;
 }
 
-VFAPI vfTransform* vfCreateTransformp(vfTransform* parent)
+VFAPI vfTransform* vfCreateTransformP(vfTransform* parent)
 {
 
 	/* find transform buffer spot */
@@ -1642,7 +1713,7 @@ VFAPI vfTransform* vfCreateTransformp(vfTransform* parent)
 	return rTransform;
 }
 
-VFAPI vfBound* vfCreateBoundt(vfTransform* body)
+VFAPI vfBound* vfCreateBoundT(vfTransform* body)
 {
 
 	/* find bound buffer spot */
@@ -1660,7 +1731,7 @@ VFAPI vfBound* vfCreateBoundt(vfTransform* body)
 	return rBound;
 }
 
-VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
+VFAPI vfBound* vfCreateBoundA(vfTransform* body, vfVector position,
 	vfVector dimensions)
 {
 
@@ -1682,50 +1753,6 @@ VFAPI vfBound* vfCreateBounda(vfTransform* body, vfVector position,
 	return rBound;
 }
 
-VFAPI vfParticle* vfCreateParticlet(vfTransform* transform)
-{
-	captureMutex("Particle Creation Timeout");
-
-	/* get free spot */
-	int pIndex = findBufferSpot(_pBuffer, _pBufferField,
-		sizeof(vfParticle));
-	_pBufferField[pIndex] = 1;
-	_pCount++;
-
-	/* set values */
-	vfParticle* rParticle = _pBuffer + pIndex;
-	rParticle->layer = 0;
-	rParticle->active = TRUE;
-	rParticle->filter = vfCreateColor(255, 255, 255, 255);
-	rParticle->transform = transform;
-
-	releaseMutex( );
-	return rParticle;
-}
-
-VFAPI vfParticle* vfCreateParticlea(vfTransform* transform, vgTexture texture,
-	vgShape shape, unsigned char layer)
-{
-	captureMutex("Particle creation timeout");
-
-	/* get free spot */
-	int pIndex = findBufferSpot(_pBuffer, _pBufferField,
-		sizeof(vfParticle));
-	_pBufferField[pIndex] = 1;
-	_pCount++;
-
-	/* set values */
-	vfParticle* rParticle = _pBuffer + pIndex;
-	rParticle->layer = layer;
-	rParticle->filter = vfCreateColor(255, 255, 255, 255);
-	rParticle->texture = texture;
-	rParticle->shape = shape;
-	rParticle->transform = transform;
-
-	releaseMutex( );
-	return rParticle;
-}
-
 VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 {
 	vfPhysics rPhys;
@@ -1742,7 +1769,7 @@ VFAPI vfPhysics vfCreatePhysics(float bounciness, float drag, float mass)
 	return rPhys;
 }
 
-VFAPI vfPhysics vfCreatePhysicsa(float bounciness, float drag, float mass,
+VFAPI vfPhysics vfCreatePhysicsA(float bounciness, float drag, float mass,
 	int moveable, int rotationLock)
 {
 	vfPhysics rPhys;
@@ -1774,8 +1801,8 @@ VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
 	/* get return entity and init values */
 	vfEntity* rEnt = _eBuffer + eIndex;
 
-	rEnt->transform = vfCreateTransforma(vfCreateVector(0, 0), 0, 1);
-	rEnt->bounds = vfCreateBounda(rEnt->transform, boundPosition,
+	rEnt->transform = vfCreateTransformA(vfCreateVector(0, 0), 0, 1);
+	rEnt->bounds = vfCreateBoundA(rEnt->transform, boundPosition,
 		boundDimensions);
 	rEnt->layer = layer;
 	rEnt->filter = vfCreateColor(255, 255, 255, 255);
@@ -1823,7 +1850,7 @@ VFAPI void vfDestroyBound(vfBound* bound, int zero)
 	}
 }
 
-VFAPI void vfDestroyParticle(vfParticle* particle, int zero)
+VFAPI void vfDestroyParticle(vfParticle* particle)
 {
 	captureMutex("Particle Destruction Timeout");
 
@@ -1831,12 +1858,8 @@ VFAPI void vfDestroyParticle(vfParticle* particle, int zero)
 	int index = particle - _pBuffer;
 	_pBufferField[index] = 0;
 	_pCount--;
-	
-	/* zero memory */
-	if (zero)
-	{
-		ZeroMemory(particle, sizeof(vfParticle));
-	}
+
+	ZeroMemory(particle, sizeof(vfParticle));
 
 	releaseMutex();
 }
@@ -1919,6 +1942,42 @@ VFAPI void* vfGetObject(vfHandle handle, int type)
 }
 
 /* RENDERING FUNCTIONS */
+static void renderParticleAlphaGroup(int low, int high)
+{
+	int checkCount = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		/* if checked all particles, break */
+		if (checkCount >= _pCount) break;
+
+		if (!_pBufferField[i]) continue;
+		checkCount++;
+		vfParticle render = _pBuffer[i];
+
+		/* get FINAL transform */
+		vfTransform tFinal = render.transform;
+
+		/* if filter alpha is 0, skip render */
+		if (render.filter.a == 0) continue;
+
+		/* if alpha does not satisfy range, continue */
+		if (render.filter.a < low)  continue;
+		if (render.filter.a > high) continue;
+
+		/* if particle is out of viewable zone, continue */
+		if (!vgCheckIfViewable(render.transform.position.x,
+			render.transform.position.y, VF_PARTICLE_CULLEXTRA)) continue;
+
+		vgRenderLayer(render.layer);
+		vgUseTexture(render.texture);
+
+		vgTextureFilter(render.filter.r, render.filter.g,
+			render.filter.b, render.filter.a);
+
+		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
+			tFinal.rotation, tFinal.scale);
+	}
+}
 
 VFAPI void vfRenderParticles(void)
 {
@@ -1930,41 +1989,65 @@ VFAPI void vfRenderParticles(void)
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
 		"Particle render timout");
 
-	int rendered = 0;
+	/* RENDER 6 ALPHA GROUPS */
+	renderParticleAlphaGroup(0xC0, 0xFF);
+	renderParticleAlphaGroup(0x80, 0xC0);
+	renderParticleAlphaGroup(0x60, 0x80);
+	renderParticleAlphaGroup(0x40, 0x60);
+	renderParticleAlphaGroup(0x20, 0x40);
+	renderParticleAlphaGroup(0x00, 0x20);
 
-	for (int i = 0; i < VF_BUFFER_SIZE; i++)
-	{
-		if (rendered >= _pCount) break;
-		if (!_pBufferField[i]) continue;
-
-		vfParticle render = _pBuffer[i];
-		if (!render.active) continue;
-
-		/* get FINAL transform */
-		vfTransform* rTransform = render.transform;
-
-		/* null check */
-		if (rTransform == NULL) continue;
-
-		int tIndex = rTransform - _tBuffer;
-		vfTransform tFinal = _tFinalBuffer[tIndex];
-
-		vgRenderLayer(render.layer);
-		vgUseTexture(render.texture);
-		vgTextureFilter(render.filter.r, render.filter.g, render.filter.b,
-			render.filter.a);
-		vgDrawShapeTextured(render.shape, tFinal.position.x, tFinal.position.y,
-			tFinal.rotation, tFinal.scale);
-
-		vgTextureFilterReset();
-		vgRenderLayer(0);
-
-		/* increment render count */
-		rendered++;
-	}
+	vgTextureFilterReset();
+	vgRenderLayer(0);
 
 	/* release mutex */
 	ReleaseMutex(_drawMutex);
+}
+
+static int renderEntityAlphaGroup(int low, int high) 
+{
+	int eChecked = 0;
+	int eRendered = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		if (eRendered >= _eCount) return 0; /* all done */
+		if (eChecked >= _eCount)  return 1; /* more to render */
+
+		if (_eBufferField[i] == 0) continue;
+
+		vfEntity renderEnt = _eBuffer[i];
+		if (!renderEnt.active) { eChecked++; continue; }
+
+		/* grab the current transform of the entity */
+		vfTransform* tTemp = renderEnt.transform;
+
+		/* grab the final transform of the entity */
+		int tIndex = tTemp - _tBuffer;
+		vfTransform tFinal = _tFinalBuffer[tIndex];
+
+		/* check if should cull */
+		if (!vgCheckIfViewable(tFinal.position.x,
+			tFinal.position.y, VF_ENTITY_CULLEXTRA))
+		{
+			eChecked++; eRendered++; continue;
+		}
+
+		/* check if should skip */
+		if (renderEnt.filter.a < low) { eChecked++; continue; }
+		if (renderEnt.filter.a > high) { eChecked++; continue; }
+
+		/* render */
+		vgRenderLayer(renderEnt.layer);
+		vgUseTexture(renderEnt.texture);
+		vgTextureFilter(renderEnt.filter.r, renderEnt.filter.g, renderEnt.filter.b,
+			renderEnt.filter.a);
+		vgDrawShapeTextured(renderEnt.shape, tFinal.position.x,
+			tFinal.position.y, tFinal.rotation, tFinal.scale);
+
+		/* increment render and check count */
+		eRendered++; eChecked++;
+	}
+	return 1;
 }
 
 VFAPI void vfRenderEntities(void)
@@ -1977,37 +2060,16 @@ VFAPI void vfRenderEntities(void)
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
 		"Entity render timeout");
 
-	int eRendered = 0;
-
-	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	/* render entity alpha groups */
+	int renderCheck = renderEntityAlphaGroup(0x90, 0xFF);
+	if (renderCheck)
 	{
-		if (eRendered >= _eCount) break;
-		if (_eBufferField[i] == 0) continue;
-
-		vfEntity renderEnt = _eBuffer[i];
-		if (!renderEnt.active) continue;
-
-		/* grab the current transform of the entity */
-		vfTransform* tTemp = renderEnt.transform;
-
-		/* grab the final transform of the entity */
-		int tIndex = tTemp - _tBuffer;
-		vfTransform tFinal = _tFinalBuffer[tIndex];
-
-		/* render */
-		vgRenderLayer(renderEnt.layer);
-		vgUseTexture(renderEnt.texture);
-		vgTextureFilter(renderEnt.filter.r, renderEnt.filter.g, renderEnt.filter.b,
-			renderEnt.filter.a);
-		vgDrawShapeTextured(renderEnt.shape, tFinal.position.x,
-			tFinal.position.y, tFinal.rotation, tFinal.scale);
-
-		vgTextureFilterReset();
-		vgRenderLayer(0);
-
-		/* increment render count */
-		eRendered++;
+		renderEntityAlphaGroup(0x40, 0x90);
+		renderEntityAlphaGroup(0x00, 0x40);
 	}
+
+	vgTextureFilterReset();
+	vgRenderLayer(0);
 
 	/* release mutex */
 	ReleaseMutex(_drawMutex);
@@ -2086,7 +2148,7 @@ VFAPI void vfRenderPartitions(void)
 	if (wResult != WAIT_OBJECT_0) return; /* on fail, don't render */
 
 	/* set render layer*/
-	vgRenderLayer(0x10);
+	vgRenderLayer(VF_PART_RENDERLAYER);
 
 	/* render lines */
 	vgLineSize(1.5f);
@@ -2097,8 +2159,14 @@ VFAPI void vfRenderPartitions(void)
 	vgColor3(0x20, 0xFF, 0x20);
 	for (int i = 0; i < _partitionCount; i++)
 	{
-		/* get partition bounding box */
+		/* get partition */
 		partition renderPart = _partBuff[i];
+
+		/* if out of bounds, don't render */
+		if (!vgCheckIfViewable(renderPart.x * _partitionSize,
+			renderPart.y * _partitionSize, 0)) continue;
+
+		/* get partition bounding box */
 		int pMinX = renderPart.x * _partitionSize;
 		int pMaxX = pMinX + _partitionSize;
 		int pMinY = renderPart.y * _partitionSize;
@@ -2187,7 +2255,7 @@ VFAPI void vfSetPartitionMaxCount(int value)
 	_partitionsMax = value;
 }
 
-VFAPI void vfGetPhysicsTickCount(long long* ticks)
+VFAPI void vfGetPhysicsTickCount(vfTickCount* ticks)
 {
 	*ticks = _tickCount;
 }
@@ -2246,6 +2314,96 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 	fflush(file);
 }
 
+/* ========== PARTICLE RELATED FUNCTIONS ========== */
+
+VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
+	vfColor filter, vfLifeTime lifeTime, vfLayer layer,
+	vfVector position, vfHandle behavior)
+{
+	/* find buffer spot and set field */
+	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
+	_pBufferField[pIndex] = 1;
+
+	/* get ref and set values */
+	vfParticle* pRef = _pBuffer + pIndex;
+	pRef->lifeTime = lifeTime;
+	pRef->layer = layer;
+	pRef->shape = shape;
+	pRef->texture = texture;
+	pRef->filter = filter;
+
+	/* set transform values */
+	pRef->transform.position = position;
+	pRef->transform.scale    = 1;
+	pRef->transform.rotation = 0;
+
+	/* set behavior */
+	if (behavior != VF_PB_ERROR)
+		pRef->behavior = _pbBuffer[behavior];
+	pRef->behavior.parent = pRef;
+
+	/* increment particle count */
+	_pCount++;
+}
+
+VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
+	vfColor filter, vfLifeTime lifeTime, vfLayer layer,
+	vfTransform transform, vfHandle behavior)
+{
+	/* find buffer spot and set field */
+	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
+	_pBufferField[pIndex] = 1;
+
+	/* get ref and set values */
+	vfParticle* pRef = _pBuffer + pIndex;
+	pRef->lifeTime = lifeTime;
+	pRef->layer = layer;
+	pRef->shape = shape;
+	pRef->texture = texture;
+	pRef->filter = filter;
+
+	/* set transform values */
+	pRef->transform = transform;
+
+	/* set behavior */
+	if (behavior != VF_PB_ERROR)
+		pRef->behavior = _pbBuffer[behavior];
+	pRef->behavior.parent = pRef;
+
+	/* increment particle count */
+	_pCount++;
+}
+
+VFAPI vfHandle vfCreateParticleBehavior(PARTUPDCALLBACK behavior)
+{
+	/* check for full */
+	if (_pbCount >= VF_PB_MAX) return VF_PB_ERROR;
+
+	/* get particle behavior ref and set data */
+	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
+	ZeroMemory(pbRef, sizeof(vfParticleBehavior));
+	pbRef->updateBehavior = behavior;
+
+	_pbCount++; /* increment behavior count */
+
+	return pbRef - _pbBuffer; /* return index */
+}
+
+VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference)
+{
+	/* check for full */
+	if (_pbCount >= VF_PB_MAX) return VF_PB_ERROR;
+
+	/* get particle behavior ref and set data */
+	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
+	*pbRef = reference;
+	pbRef->parent = NULL;
+
+	_pbCount++; /* increment behavior count */
+
+	return pbRef - _pbBuffer; /* return index */
+}
+
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize)
 {
@@ -2259,76 +2417,52 @@ VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 }
 
 /* DATA RELATED FUNCTIONS */
-VFAPI int vfGetBuffer(void* buffer, int size, int type)
+VFAPI void* vfGetBuffer(int type)
 {
-	/* bad size check */
-	if (size < 0) return 0;
-
-	/* select buffer to read from */
-	unsigned char* pbuff;
+	/* return buffer point based on type */
 	switch (type)
 	{
 	case VF_BUFF_TRANSFORM:
-		pbuff = (BYTE*)_tBuffer;
-		break;
+		return _tBuffer;
 
 	case VF_BUFF_BOUND:
-		pbuff = (BYTE*)_bBuffer;
-		break;
+		return _bBuffer;
 
 	case VF_BUFF_PARTICLE:
-		pbuff = (BYTE*)_pBuffer;
-		break;
+		return _pBuffer;
 
 	case VF_BUFF_ENTITY:
-		pbuff = (BYTE*)_eBuffer;
-		break;
+		return _eBuffer;
+
+	case VF_BUFF_PARTITION:
+		return _partBuff;
 	
 	/* fail condition */
 	default:
-		return 0;
-		break;
+		return NULL;
 	}
-
-	/* write to user buffer */
-	memcpy(buffer, pbuff, size);
-	return 1;
 }
 
-VFAPI int vfGetBufferField(void* field, int size, int type)
+VFAPI void* vfGetBufferField(int type)
 {
-	/* bad size check */
-	if (size < 0) return 0;
-
-	/* select buffer to read from */
-	unsigned char* pbuff;
+	/* return field ptr (if exists) */
 	switch (type)
 	{
 	case VF_BUFF_TRANSFORM:
-		pbuff = _tBufferField;
-		break;
+		return _tBufferField;
 
 	case VF_BUFF_BOUND:
-		pbuff = _bBufferField;
-		break;
+		return _bBufferField;
 
 	case VF_BUFF_PARTICLE:
-		pbuff = _pBufferField;
-		break;
+		return _pBufferField;
 
 	case VF_BUFF_ENTITY:
-		pbuff = _eBufferField;
-		break;
+		return _eBufferField;
 
-		/* fail condition */
 	default:
-		return 0;
-		break;
+		return NULL;
 	}
-
-	/* write to user buffer */
-	memcpy(field, pbuff, size);
-	return 1;
 }
 
 VFAPI int vfGetObjectCount(int type)
@@ -2358,86 +2492,4 @@ VFAPI int vfGetObjectCount(int type)
 	}
 
 	return count;
-}
-
-/* ALLOCATING AND FREEING FUNCTION */
-static int ensureFreeMTBlock(int startIndex, int size)
-{
-	for (int i = 0; i < size; i++)
-	{
-		/* check for contig, if !, ret 0 */
-		if (_mTField[startIndex + i] == 1) return 0;
-	}
-	return 1;
-}
-
-static int findFreeMTIndex(int size)
-{
-	for (int i = 0; i < VF_MEMTANK_FIELDSIZE; i++)
-	{
-		/* on find free spot, ret index */
-		if (_mTField[i] == 0 && ensureFreeMTBlock(i, size))
-			return i;
-	}
-
-	/* on fail, ret -1 */
-	return -1;
-}
-
-VFAPI void* vfMTAlloc(int size, int zero)
-{
-	/* bad size condition */
-	if (size < 0 || size / VF_MEMTANK_INTERVAL > VF_BUFFER_SIZE) 
-		return NULL;
-
-	/* find lowest multiple of interval which satisfies size */
-	float fsize = (float)size;
-	int sizeActual = (int)ceilf(fsize / VF_MEMTANK_INTERVAL);
-
-	/* check for the impossible */
-	if (sizeActual * VF_MEMTANK_INTERVAL < size) sizeActual++;
-
-	/* find index */
-	int index = findFreeMTIndex(sizeActual);
-
-	/* fail condition */
-	if (index == -1) return NULL;
-
-	/* fill field */
-	for (int i = 0; i < sizeActual; i++)
-		_mTField[index + i] = 1;
-
-	/* check zero and return ptr */
-	if (zero) ZeroMemory(_mTank + index, 
-		sizeActual * VF_MEMTANK_INTERVAL);
-	return _mTank + index;
-}
-
-VFAPI int vfMTFree(void* ptr, int size, int zero)
-{
-	/* cast ptr */
-	BYTE* cPtr = ptr;
-
-	/* check for bad ptr */
-	if (cPtr == NULL) return 0;
-
-	/* check more for bad ptr */
-	if (cPtr < _mTank || cPtr > _mTank + VF_MEMTANK_SIZE) return 0;
-
-	/* find lowest multiple of 8 which satisfies size */
-	float fsize = (float)size;
-	int sizeActual = (int)ceilf(fsize / VF_MEMTANK_INTERVAL);
-
-	/* check for the impossible */
-	if (sizeActual * VF_MEMTANK_INTERVAL < size) sizeActual++;
-
-	/* free field */
-	int startIndex = ((char*)ptr - _mTank) / VF_MEMTANK_INTERVAL;
-	for (int i = 0; i < sizeActual; i++)
-		_mTField[startIndex + i] = 0;
-
-	/* zero */
-	if (zero) ZeroMemory(ptr, sizeActual * VF_MEMTANK_INTERVAL);
-
-	return 1;
 }
