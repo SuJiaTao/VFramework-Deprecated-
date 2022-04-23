@@ -263,7 +263,7 @@ VFAPI void vfGetPhysicsCollisionCounts(int* objCheckCount,
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize);
 VFAPI void vfLogPhysicsPartitionData(FILE* file);
-VFAPI void vfLogPhysicsCollisionsData(FILE* file);
+VFAPI void vfLogPhysicsCollisionData(FILE* file);
 
 /* PARTICLE RELATED FUNCTIONS */
 VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
