@@ -1786,7 +1786,7 @@ VFAPI vfPhysics vfCreatePhysicsA(float bounciness, float drag, float mass,
 	return rPhys;
 }
 
-VFAPI vfEntity* vfCreateEntity(unsigned char layer, vgShape shape,
+VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 	vgTexture texture, vfPhysics physics, vfVector boundPosition,
 	vfVector boundDimensions)
 {
