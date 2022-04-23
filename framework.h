@@ -49,8 +49,9 @@
 #define VF_COLLISIONS_MAX 0x10
 #define VF_NOPARENT NULL
 #define VF_NOENTITY NULL
-#define VF_PARTICLE_CULLEXTRA 0.05f
-#define VF_PARTICLE_DESTROYEXTRA 0.5f
+#define VF_PARTICLE_CULLEXTRA    0.05f
+#define VF_PARTICLE_DESTROYEXTRA 1.5f
+#define VF_ENTITY_CULLEXTRA      0.25f
 
 #define VF_WMUTEX_TIMEOUT 0xFF
 #define VF_RMUTEX_TIMEOUT 0x10
@@ -108,8 +109,7 @@ typedef uint16_t vfLifeTime;
 typedef void (*ENTCOLCALLBACK) (struct vfEntity* source, struct vfEntity* target);
 typedef void (*ENTUPDCALLBACK) (struct vfEntity* source);
 typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
-typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* behavior,
-	struct vfTransform* particleTransform, vfLifeTime particleAge);
+typedef void (*PARTUPDCALLBACK)(struct vfParticle* currentParticle);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector

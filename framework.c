@@ -1356,8 +1356,7 @@ static void updateParticles(void)
 		/* call behavior callbacks (if exists) */
 		if (partRef->behavior.updateBehavior != NULL &&
 			partRef->behavior.updateBehavior != VF_PB_ERROR)
-			partRef->behavior.updateBehavior(&(partRef->behavior),
-				&(partRef->transform), partRef->lifeAge);
+			partRef->behavior.updateBehavior(partRef);
 
 		/* update all values */
 		partRef->transform.position = vectorAdd(partRef->transform.position,
@@ -2008,6 +2007,52 @@ VFAPI void vfRenderParticles(void)
 	ReleaseMutex(_drawMutex);
 }
 
+static int renderEntityAlphaGroup(int low, int high) 
+{
+	int eChecked = 0;
+	int eRendered = 0;
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		if (eRendered >= _eCount) return 0; /* all done */
+		if (eChecked >= _eCount)  return 1; /* more to render */
+
+		if (_eBufferField[i] == 0) continue;
+
+		vfEntity renderEnt = _eBuffer[i];
+		if (!renderEnt.active) { eChecked++; continue; }
+
+		/* grab the current transform of the entity */
+		vfTransform* tTemp = renderEnt.transform;
+
+		/* grab the final transform of the entity */
+		int tIndex = tTemp - _tBuffer;
+		vfTransform tFinal = _tFinalBuffer[tIndex];
+
+		/* check if should cull */
+		if (!vgCheckIfViewable(tFinal.position.x,
+			tFinal.position.y, VF_ENTITY_CULLEXTRA))
+		{
+			eChecked++; eRendered++; continue;
+		}
+
+		/* check if should skip */
+		if (renderEnt.filter.a < low) { eChecked++; continue; }
+		if (renderEnt.filter.a > high) { eChecked++; continue; }
+
+		/* render */
+		vgRenderLayer(renderEnt.layer);
+		vgUseTexture(renderEnt.texture);
+		vgTextureFilter(renderEnt.filter.r, renderEnt.filter.g, renderEnt.filter.b,
+			renderEnt.filter.a);
+		vgDrawShapeTextured(renderEnt.shape, tFinal.position.x,
+			tFinal.position.y, tFinal.rotation, tFinal.scale);
+
+		/* increment render and check count */
+		eRendered++; eChecked++;
+	}
+	return 1;
+}
+
 VFAPI void vfRenderEntities(void)
 {
 	/* check for render skip */
@@ -2018,37 +2063,16 @@ VFAPI void vfRenderEntities(void)
 	if (mResult != WAIT_OBJECT_0) showMutexError("DrawMutex",
 		"Entity render timeout");
 
-	int eRendered = 0;
-
-	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	/* render entity alpha groups */
+	int renderCheck = renderEntityAlphaGroup(0x90, 0xFF);
+	if (renderCheck)
 	{
-		if (eRendered >= _eCount) break;
-		if (_eBufferField[i] == 0) continue;
-
-		vfEntity renderEnt = _eBuffer[i];
-		if (!renderEnt.active) continue;
-
-		/* grab the current transform of the entity */
-		vfTransform* tTemp = renderEnt.transform;
-
-		/* grab the final transform of the entity */
-		int tIndex = tTemp - _tBuffer;
-		vfTransform tFinal = _tFinalBuffer[tIndex];
-
-		/* render */
-		vgRenderLayer(renderEnt.layer);
-		vgUseTexture(renderEnt.texture);
-		vgTextureFilter(renderEnt.filter.r, renderEnt.filter.g, renderEnt.filter.b,
-			renderEnt.filter.a);
-		vgDrawShapeTextured(renderEnt.shape, tFinal.position.x,
-			tFinal.position.y, tFinal.rotation, tFinal.scale);
-
-		vgTextureFilterReset();
-		vgRenderLayer(0);
-
-		/* increment render count */
-		eRendered++;
+		renderEntityAlphaGroup(0x40, 0x90);
+		renderEntityAlphaGroup(0x00, 0x40);
 	}
+
+	vgTextureFilterReset();
+	vgRenderLayer(0);
 
 	/* release mutex */
 	ReleaseMutex(_drawMutex);
