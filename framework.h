@@ -109,7 +109,8 @@ typedef uint16_t vfLifeTime;
 typedef void (*ENTCOLCALLBACK) (struct vfEntity* source, struct vfEntity* target);
 typedef void (*ENTUPDCALLBACK) (struct vfEntity* source);
 typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
-typedef void (*PARTUPDCALLBACK)(struct vfParticle* currentParticle);
+typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* thisBehavior,
+	vfLifeTime particleAge);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -167,6 +168,7 @@ typedef struct vfParticleBehavior
 	float    torque;       /* initial torque */
 	float    sizeChange;   /* initial sizeChange */
 
+	struct vfParticle* parent; /* parent particle */
 	PARTUPDCALLBACK updateBehavior; /* called every update */
 } vfParticleBehavior;
 
@@ -229,7 +231,7 @@ VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 /* STRUCT DESTRUCTION FUNCTIONS */
 VFAPI void vfDestroyTransform(vfTransform* transform, int zero);
 VFAPI void vfDestroyBound(vfBound* bound, int zero);
-VFAPI void vfDestroyParticle(vfParticle* particle, int zero);
+VFAPI void vfDestroyParticle(vfParticle* particle);
 VFAPI void vfDestroyEntity(vfEntity* entity, int zero);
 
 /* STRUCT RELATED FUNCTIONS */

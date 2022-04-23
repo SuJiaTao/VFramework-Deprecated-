@@ -1356,7 +1356,8 @@ static void updateParticles(void)
 		/* call behavior callbacks (if exists) */
 		if (partRef->behavior.updateBehavior != NULL &&
 			partRef->behavior.updateBehavior != VF_PB_ERROR)
-			partRef->behavior.updateBehavior(partRef);
+			partRef->behavior.updateBehavior(&(partRef->behavior),
+				partRef->lifeAge);
 
 		/* update all values */
 		partRef->transform.position = vectorAdd(partRef->transform.position,
@@ -1849,7 +1850,7 @@ VFAPI void vfDestroyBound(vfBound* bound, int zero)
 	}
 }
 
-VFAPI void vfDestroyParticle(vfParticle* particle, int zero)
+VFAPI void vfDestroyParticle(vfParticle* particle)
 {
 	captureMutex("Particle Destruction Timeout");
 
@@ -1857,12 +1858,8 @@ VFAPI void vfDestroyParticle(vfParticle* particle, int zero)
 	int index = particle - _pBuffer;
 	_pBufferField[index] = 0;
 	_pCount--;
-	
-	/* zero memory */
-	if (zero)
-	{
-		ZeroMemory(particle, sizeof(vfParticle));
-	}
+
+	ZeroMemory(particle, sizeof(vfParticle));
 
 	releaseMutex();
 }
@@ -2337,6 +2334,7 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 	/* set behavior */
 	if (behavior != VF_PB_ERROR)
 		pRef->behavior = _pbBuffer[behavior];
+	pRef->behavior.parent = pRef;
 
 	/* increment particle count */
 	_pCount++;
@@ -2364,6 +2362,7 @@ VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
 	/* set behavior */
 	if (behavior != VF_PB_ERROR)
 		pRef->behavior = _pbBuffer[behavior];
+	pRef->behavior.parent = pRef;
 
 	/* increment particle count */
 	_pCount++;
@@ -2392,6 +2391,7 @@ VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference)
 	/* get particle behavior ref and set data */
 	vfParticleBehavior* pbRef = _pbBuffer + _pbCount;
 	*pbRef = reference;
+	pbRef->parent = NULL;
 
 	_pbCount++; /* increment behavior count */
 
