@@ -873,16 +873,32 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		if (isnan(smallestPVect.y)) smallestPVect.y = 0;
 
 		/* get pushvector ratio */
-		vfPhysics* targetPhys = &(target->staticData.entity->physics);
-		vfPhysics* sourcePhys = &(target->staticData.entity->physics);
-		float massTotal = targetPhys->mass + sourcePhys->mass;
-		float massPercent = 1.0f - (targetPhys->mass / massTotal);
+		float sourceMass = 0; vfPhysics* sourcePhys = NULL;
+		float targetMass = 0; vfPhysics* targetPhys = NULL;
+		float massTotal = 0; float massPercent = 0;
 
-		/* if current is immovable or physics is inactive, massPercent is 1.0 */
-		if (!sourcePhys->moveable ||
-			!sourcePhys->active)
+		/* if source has no entity, ratio is 100% */
+		if (source->staticData.entity == NULL)
 		{
-			massPercent = 1.0f;
+			/* set masspercent to no entity pushback ratio */
+			/* this value should ideally be a little over 1.0f */
+			massPercent = VF_PUSHBACK_RATIO_NOENT;
+		}
+		else
+		{
+			/* if source has entity, weight mass properly */
+			sourcePhys = &(target->staticData.entity->physics);
+			targetPhys = &(source->staticData.entity->physics);
+			massTotal = targetPhys->mass + sourcePhys->mass;
+			massPercent = 1.0f - (targetPhys->mass / massTotal);
+
+			/* if current is immovable or physics is inactive */
+			/* set massPercent to 1.0 */
+			if (!sourcePhys->moveable ||
+				!sourcePhys->active)
+			{
+				massPercent = 1.0f;
+			}
 		}
 
 		/* negative pushback vector */
@@ -1679,6 +1695,8 @@ VFAPI vfTransform* vfCreateTransformV(vfVector vector)
 	/* set values */
 	vfTransform* rTransform = _tBuffer + tIndex;
 	rTransform->position = vector;
+	rTransform->rotation = 0;
+	rTransform->scale    = 1;
 	rTransform->parent = VF_NOPARENT;
 
 	return rTransform;
@@ -2170,8 +2188,11 @@ VFAPI void vfRenderPartitions(void)
 		partition renderPart = _partBuff[i];
 
 		/* if out of bounds, don't render */
-		if (!vgCheckIfViewable(renderPart.x * _partitionSize,
-			renderPart.y * _partitionSize, 0)) continue;
+		float partCenterX = (renderPart.x * _partitionSize)
+			+ (_partitionSize / 2);
+		float partCenterY = (renderPart.y * _partitionSize)
+			+ (_partitionSize / 2);
+		if (!vgCheckIfViewable(partCenterX, partCenterY, 0)) continue;
 
 		/* get partition bounding box */
 		int pMinX = renderPart.x * _partitionSize;
