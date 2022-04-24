@@ -24,10 +24,10 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _WIN32_LEAN_AND_MEAN 
 
-#include <stdio.h> /* For file I/O */
+#include <stdio.h>  /* For file I/O */
 #include <malloc.h> /* For memory management */
 #include <string.h> /* For strlen function */
-#include <math.h> /* For trig functions */
+#include <math.h>   /* For trig functions */
 
 #include <Windows.h> /* For time related functions */
 
@@ -101,6 +101,10 @@ typedef struct boundQuad
 
 } boundQuad;
 
+/* boundquad buffer, this buffer maps ever Bound object to a quad, which */
+/* is the Bound object's dimensions and offset translated by it's transform */
+static boundQuad* _bqBuffer;
+
 /* projVect struct definition */
 typedef struct projVect 
 {
@@ -172,10 +176,6 @@ static inline void releaseMutex(void)
 	ReleaseMutex(_writeMutex);
 }
 
-/* boundquad buffer, this buffer maps ever Bound object to a quad, which */
-/* is the Bound object's dimensions and offset translated by it's transform */
-static boundQuad* _bqBuffer;
-
 /* SPACE PARTITION BUFFERS */
 typedef struct partition
 {
@@ -198,6 +198,8 @@ static int _partitionsMax = 0;
 /* GET BQ VEL MAG (gets speed heuristic for a given bq) */
 static float getBQVelMag(boundQuad* bq)
 {
+	if (bq->staticData.entity == NULL) return 0;
+
 	float velX = fabsf(bq->staticData.entity->physics.velocity.x);
 	float velY = fabsf(bq->staticData.entity->physics.velocity.y);
 	float velT = fabsf(bq->staticData.entity->physics.tourque);
@@ -392,11 +394,11 @@ static void assignPartition(boundQuad* bq)
 	/* buffers for later */
 	int pCountX = 0;
 	int pCountY = 0;
-	int pBuffX[VF_ENT_PART_MAX];
-	int pBuffY[VF_ENT_PART_MAX];
+	int pBuffX[VF_BOUND_PART_MAX];
+	int pBuffY[VF_BOUND_PART_MAX];
 
 	/* check which part the bq is part of */
-	partCheck(bq, VF_ENT_PART_MAX, &pCountX, &pCountY, pBuffX,
+	partCheck(bq, VF_BOUND_PART_MAX, &pCountX, &pCountY, pBuffX,
 		pBuffY);
 
 	/* add bq to all given parts */
@@ -1072,15 +1074,20 @@ static inline void updateCollisions(void)
 					currentPart.bqIndexes[tbIndex];
 				if (sourcePtr == targetPtr) continue;
 
-				/* if both velocities are zero, skip */
-				/* physics ages must also be mature, since newly */
-				/* spawned objects generally have 0 velocity */
-				ULONG64 sAge = sourcePtr->staticData.entity->physics.age;
-				ULONG64 tAge = targetPtr->staticData.entity->physics.age;
-				if (floorf(getBQVelMag(sourcePtr)) == 0 &&
-					floorf(getBQVelMag(targetPtr)) == 0 &&
-					sAge > VF_PART_SKIP_MINAGE &&
-					tAge > VF_PART_SKIP_MINAGE) continue;
+				/* ensuer bounds have entity attatched */
+				if (sourcePtr->staticData.entity != NULL &&
+					targetPtr->staticData.entity != NULL)
+				{
+					/* if both velocities are zero, skip */
+					/* physics ages must also be mature, since newly */
+					/* spawned objects generally have 0 velocity */
+					ULONG64 sAge = sourcePtr->staticData.entity->physics.age;
+					ULONG64 tAge = targetPtr->staticData.entity->physics.age;
+					if (floorf(getBQVelMag(sourcePtr)) == 0 &&
+						floorf(getBQVelMag(targetPtr)) == 0 &&
+						sAge > VF_PART_SKIP_MINAGE &&
+						tAge > VF_PART_SKIP_MINAGE) continue;
+				}
 
 				/* perform collision check */
 				collisionCheck(sourcePtr, targetPtr);
