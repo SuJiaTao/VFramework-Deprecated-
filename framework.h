@@ -92,13 +92,16 @@
 
 #define VF_STATICCALLBACK_MAX 0x20
 
-#define VECT(x, y) vfCreateVector(x, y)
-#define COLOR(r, g, b) vfCreateColor(r, g, b, 255)
-#define COLORA(r, g, b, a) vfCreateColor(r, g, b, a)
-#define COLOR_OPAQUE vfCreateColor(255, 255, 255, 255)
-#define COLOR_TRANSPARENT vfCreateColor(255, 255, 255, 0)
-#define PHYS(b, d, m) vfCreatePhysics(b, d, m)
-#define PHYSA(b, d, m, mov, rLock) vfCreatePhysicsA(b, d, m, mov, rLock)
+#define VECT(x, y)             vfCreateVector(x, y)
+#define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
+#define COLORA(r, g, b, a)     vfCreateColor(r, g, b, a)
+#define COLOR_OPAQUE           vfCreateColor(255, 255, 255, 255)
+#define COLOR_TRANSPARENT      vfCreateColor(255, 255, 255, 0)
+#define PHYS(b, d, m)          vfCreatePhysics(b, d, m)
+#define PHYSA(b, d, m, mv, rl) vfCreatePhysicsA(b, d, m, mv, rl)
+#define TFORM(pos)             vfCreateTransformV(pos)
+#define TFORMV(x, y)           vfCreateTransformV(VECT(x, y))
+#define TFORMA(p, r, s)        vfCreateTransformA(p, r, s)
 
 /* TYPEDEFS */
 typedef uint8_t  vfFlag;
@@ -215,8 +218,8 @@ VFAPI void vfThreadSleepTime(unsigned int miliseconds);
 /* STRUCT CREATION FUNCTIONS */
 VFAPI vfVector vfCreateVector(float x, float y);
 VFAPI vfColor vfCreateColor(int r, int g, int b, int a);
-VFAPI vfTransform* vfCreateTransformV(vfVector vector);
-VFAPI vfTransform* vfCreateTransformA(vfVector vector, float rotation,
+VFAPI vfTransform* vfCreateTransformV(vfVector position);
+VFAPI vfTransform* vfCreateTransformA(vfVector position, float rotation,
 	float scale);
 VFAPI vfTransform* vfCreateTransformP(vfTransform* parent);
 VFAPI vfBound* vfCreateBoundT(vfTransform* body);
