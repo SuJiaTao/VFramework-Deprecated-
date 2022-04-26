@@ -880,6 +880,12 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		/* if source has no entity, ratio is 100% */
 		if (source->staticData.entity == NULL)
 		{
+			/* instant displacement */
+			target->staticData.entity->transform->position.x
+				-= smallestPVect.x;
+			target->staticData.entity->transform->position.y
+				-= smallestPVect.y;
+
 			/* set ratio to 1 */
 			massPercent = 1.0f;
 		}
