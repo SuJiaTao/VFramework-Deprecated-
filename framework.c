@@ -880,9 +880,8 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		/* if source has no entity, ratio is 100% */
 		if (source->staticData.entity == NULL)
 		{
-			/* set masspercent to no entity pushback ratio */
-			/* this value should ideally be a little over 1.0f */
-			massPercent = VF_PUSHBACK_RATIO_NOENT;
+			/* set ratio to 1 */
+			massPercent = 1.0f;
 		}
 		else
 		{
@@ -890,7 +889,9 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 			sourcePhys = &(target->staticData.entity->physics);
 			targetPhys = &(source->staticData.entity->physics);
 			massTotal = targetPhys->mass + sourcePhys->mass;
-			massPercent = 1.0f - (targetPhys->mass / massTotal);
+
+			/* percentage to apply to target */
+			massPercent = 1.0f - (sourcePhys->mass / massTotal);
 
 			/* if current is immovable or physics is inactive */
 			/* set massPercent to 1.0 */
