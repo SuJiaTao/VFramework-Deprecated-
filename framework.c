@@ -1109,7 +1109,7 @@ static inline void updateCollisions(void)
 					if (floorf(getBQVelMag(sourcePtr)) == 0 &&
 						floorf(getBQVelMag(targetPtr)) == 0 &&
 						sAge > VF_PART_SKIP_MINAGE &&
-						tAge > VF_PART_SKIP_MINAGE) continue;
+						tAge > VF_PART_SKIP_MINAGE   ) continue;
 				}
 
 				/* perform collision check */

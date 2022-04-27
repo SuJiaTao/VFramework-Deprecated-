@@ -57,24 +57,24 @@
 #define VF_RMUTEX_TIMEOUT 0x10
 
 #define VF_PUSHBACK_RATIO_NOENT 1.15f
-#define VF_PUSHBACK_MAGNITUDE_MAX 0x20
+#define VF_PUSHBACK_MAGNITUDE_MAX 0x40
 #define VF_TOURQUE_MIN_VELOCITY 1.5f
 #define VF_TOURQUE_MAX 5.0f
 #define VF_VECTOR_SIMILARITY_THRESOLD 0.15f
 #define VF_POSITION_SIMILARITY 0.03f
 
-#define VF_PART_SIZE_DEFAULT 0x5000
-#define VF_PART_COUNT_INCREMENT 0x100
+#define VF_PART_SIZE_DEFAULT      0x5000
+#define VF_PART_COUNT_INCREMENT   0x100
 #define VF_PART_INCREASE_THRESOLD 0x20
 #define VF_PART_DECREASE_THRESOLD 0x40
 #define VF_PART_COUNT_MAXIMUM 0x1000
-#define VF_PART_STEP 0x40
-#define VF_BOUND_PART_MAX 0x20
-#define VF_PART_OVERAGE_TIME 0x80
-#define VF_PART_OVERLAPSCALE 1.05f
+#define VF_PART_STEP          0x40
+#define VF_BOUND_PART_MAX     0x20
+#define VF_PART_OVERAGE_TIME  0x80
+#define VF_PART_OVERLAPSCALE  1.05f
 #define VF_PART_SKIP_DAMPENER 2.5f
-#define VF_PART_SKIP_MINAGE  0x40
-#define VF_PART_RENDERLAYER 0x10
+#define VF_PART_SKIP_MINAGE   0x200
+#define VF_PART_RENDERLAYER   0x10
 
 #define VF_PB_MAX 0x40
 #define VF_PB_ERROR -1
@@ -92,6 +92,8 @@
 #define VF_BUFF_PARTITION 0x5
 
 #define VF_STATICCALLBACK_MAX 0x20
+
+#define VF_ATTRIBS_MAX 0xFF
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
@@ -116,6 +118,7 @@ typedef void (*ENTUPDCALLBACK) (struct vfEntity* source);
 typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
 typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* thisBehavior,
 	vfLifeTime particleAge);
+typedef void* (*ATTRIBGETFUNC)(struct vfEntity* source, const char* attributeName);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -193,6 +196,14 @@ typedef struct vfParticle
 	vfParticleBehavior behavior; /* particle behavior */
 } vfParticle;
 
+typedef struct vfAttributeTable
+{
+	uint32_t attribNameHash  [VF_ATTRIBS_MAX]; /* attribute name hash     */
+	uint16_t attribByteOffset[VF_ATTRIBS_MAX]; /* memory block offset ptr */
+	uint16_t attribByteCount; /* bytes used */
+	uint8_t* memBlock; /* memory block */
+} vfAttributeTable;
+
 typedef struct vfEntity
 {
 	vfFlag active;
@@ -207,6 +218,9 @@ typedef struct vfEntity
 
 	ENTCOLCALLBACK collisionCallback;
 	ENTUPDCALLBACK updateCallback;
+
+	vfAttributeTable attribTable;
+	ATTRIBGETFUNC    getAttribute;
 } vfEntity;
 
 /* MODULE INIT AND TERMINATE FUNCTIONS */
