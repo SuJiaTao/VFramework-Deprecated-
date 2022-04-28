@@ -2130,6 +2130,12 @@ static int renderEntityAlphaGroup(int low, int high)
 			eChecked++; eRendered++; continue;
 		}
 
+		/* check if just spawned in (don't render) */
+		if (renderEnt.physics.age <= 1)
+		{
+			eChecked++; eRendered++; continue;
+		}
+
 		/* check if should skip */
 		if (renderEnt.filter.a < low) { eChecked++; continue; }
 		if (renderEnt.filter.a > high) { eChecked++; continue; }
