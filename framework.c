@@ -1693,9 +1693,17 @@ VFAPI void vfTerminate(void)
 	vFree(_bBuffer);
 	vFree(_pBuffer);
 	vFree(_pbBuffer);
-	vFree(_eBuffer);
 	vFree(_bqBuffer);
 	vFree(_tFinalBuffer);
+
+	/* free all entity attribute data */
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		if (_eBuffer[i].attribBlock != NULL)
+			HeapFree(_heap, FALSE, _eBuffer[i].attribBlock);
+	}
+	/* free entity buffer */
+	vFree(_eBuffer);
 
 	/* free all buffer fields */
 	vFree(_tBufferField);
