@@ -131,10 +131,10 @@ typedef struct vfVector
 
 typedef struct vfColor
 {
-	uint8_t r;
-	uint8_t g;
-	uint8_t b;
-	uint8_t a;
+	int16_t r;
+	int16_t g;
+	int16_t b;
+	int16_t a;
 } vfColor;
 
 typedef struct vfTransform
