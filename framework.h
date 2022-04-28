@@ -55,7 +55,7 @@
 #define VF_ENTITY_CULLEXTRA      0.25f
 
 #define VF_WMUTEX_TIMEOUT 0xFF
-#define VF_RMUTEX_TIMEOUT 0x10
+#define VF_RMUTEX_TIMEOUT 0xFF
 
 #define VF_PUSHBACK_RATIO_NOENT 1.15f
 #define VF_PUSHBACK_MAGNITUDE_MAX 0x40
@@ -255,6 +255,10 @@ VFAPI void vfDestroyTransform(vfTransform* transform, int zero);
 VFAPI void vfDestroyBound(vfBound* bound, int zero);
 VFAPI void vfDestroyParticle(vfParticle* particle);
 VFAPI void vfDestroyEntity(vfEntity* entity, int zero);
+VFAPI void vfDestroyAllBounds(int zero);
+VFAPI void vfDestroyAllNonEntityBounds(int zero);
+VFAPI void vfDestroyAllParticles(int zero);
+VFAPI void vfDestroyAllEntities(int zero);
 
 /* STRUCT RELATED FUNCTIONS */
 VFAPI vfHandle vfGetTransformHandle(vfTransform* transform);

@@ -1922,6 +1922,9 @@ VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 
 VFAPI void vfDestroyTransform(vfTransform* transform, int zero)
 {
+	/* check already destroyed */
+	if (_tBufferField[transform - _tBuffer] == 0) return;
+
 	/* get index and update buffer field */
 	int index = transform - _tBuffer;
 	_tBufferField[index] = 0;
@@ -1936,6 +1939,9 @@ VFAPI void vfDestroyTransform(vfTransform* transform, int zero)
 
 VFAPI void vfDestroyBound(vfBound* bound, int zero)
 {
+	/* check already destroyed */
+	if (_bBufferField[bound - _bBuffer] == 0) return;
+
 	/* get index and update buffer field */
 	int index = bound - _bBuffer;
 	_bBufferField[index] = 0;
@@ -1950,6 +1956,9 @@ VFAPI void vfDestroyBound(vfBound* bound, int zero)
 
 VFAPI void vfDestroyParticle(vfParticle* particle)
 {
+	/* check already destroyed */
+	if (_pBufferField[particle - _pBuffer] == 0) return;
+
 	captureMutex("Particle Destruction Timeout");
 
 	/* get index and update buffer field */
@@ -1964,6 +1973,9 @@ VFAPI void vfDestroyParticle(vfParticle* particle)
 
 VFAPI void vfDestroyEntity(vfEntity* entity, int zero)
 {
+	/* check already destroyed */
+	if (_eBufferField[entity - _eBuffer] == 0) return;
+
 	captureMutex("Entity destruction timeout");
 
 	/* free entity attribute buffer (if exists) */
@@ -1990,6 +2002,34 @@ VFAPI void vfDestroyEntity(vfEntity* entity, int zero)
 	}
 
 	releaseMutex();
+}
+
+VFAPI void vfDestroyAllBounds(int zero)
+{
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+		vfDestroyBound(_bBuffer + i, zero);
+}
+
+VFAPI void vfDestroyAllNonEntityBounds(int zero)
+{
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+	{
+		vfBound* boundToDestroy = _bBuffer + i;
+		if (boundToDestroy->entity == NULL)
+			vfDestroyBound(boundToDestroy, zero);
+	}	
+}
+
+VFAPI void vfDestroyAllParticles(int zero)
+{
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+		vfDestroyParticle(_pBuffer + i, zero);
+}
+
+VFAPI void vfDestroyAllEntities(int zero)
+{
+	for (int i = 0; i < VF_BUFFER_SIZE; i++)
+		vfDestroyEntity(_eBuffer + i, zero);
 }
 
 /* STRUCT RELATED FUNCTIONS */
