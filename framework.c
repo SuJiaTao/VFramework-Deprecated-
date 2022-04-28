@@ -1878,7 +1878,6 @@ VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 	/* find free spot */
 	int eIndex = findBufferSpot(_eBuffer, _eBufferField,
 		sizeof(vfEntity));
-	_eBufferField[eIndex] = 1;
 	_eCount++;
 	
 	/* get return entity and init values */
@@ -1903,6 +1902,9 @@ VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 
 	/* set active last */
 	rEnt->active = TRUE;
+
+	/* mark field */
+	_eBufferField[eIndex] = 1;
 
 	releaseMutex( );
 	return rEnt;
@@ -2419,9 +2421,8 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 	vfColor filter, vfLifeTime lifeTime, vfLayer layer,
 	vfVector position, vfHandle behavior)
 {
-	/* find buffer spot and set field */
+	/* find buffer spot */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
-	_pBufferField[pIndex] = 1;
 
 	/* get ref and set values */
 	vfParticle* pRef = _pBuffer + pIndex;
@@ -2441,7 +2442,8 @@ VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
 		pRef->behavior = _pbBuffer[behavior];
 	pRef->behavior.parent = pRef;
 
-	/* increment particle count */
+	/* increment particle count and mark field */
+	_pBufferField[pIndex] = 1;
 	_pCount++;
 }
 
@@ -2449,9 +2451,8 @@ VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
 	vfColor filter, vfLifeTime lifeTime, vfLayer layer,
 	vfTransform transform, vfHandle behavior)
 {
-	/* find buffer spot and set field */
+	/* find buffer spot */
 	int pIndex = findBufferSpot(_pBuffer, _pBufferField, sizeof(vfParticle));
-	_pBufferField[pIndex] = 1;
 
 	/* get ref and set values */
 	vfParticle* pRef = _pBuffer + pIndex;
@@ -2469,7 +2470,8 @@ VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
 		pRef->behavior = _pbBuffer[behavior];
 	pRef->behavior.parent = pRef;
 
-	/* increment particle count */
+	/* increment particle count and mark field */
+	_pBufferField[pIndex] = 1;
 	_pCount++;
 }
 

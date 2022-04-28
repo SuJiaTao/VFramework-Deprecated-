@@ -74,7 +74,7 @@
 #define VF_PART_OVERAGE_TIME  0x80
 #define VF_PART_OVERLAPSCALE  1.05f
 #define VF_PART_SKIP_DAMPENER 2.5f
-#define VF_PART_SKIP_MINAGE   0x200
+#define VF_PART_SKIP_MINAGE   0x80
 #define VF_PART_RENDERLAYER   0x10
 
 #define VF_PB_MAX 0x40
@@ -202,7 +202,7 @@ typedef struct vfAttributeTable
 {
 	uint32_t attribNameHash  [VF_ATTRIBS_MAX]; /* attribute name hash     */
 	uint16_t attribByteOffset[VF_ATTRIBS_MAX]; /* memory block offset ptr */
-	uint16_t attribByteCount; /* bytes used */
+	uint16_t attribByteCount; /* bytes used   */
 	uint8_t  attribCount;     /* attribs used */
 } vfAttributeTable;
 
