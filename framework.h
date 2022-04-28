@@ -300,6 +300,7 @@ VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference);
 VFAPI vfHandle vfAttribTableRegister(vfAttributeTable toRegister);
 VFAPI void vfAttribTableAdd(vfAttributeTable* target,
 	const char* attributeName, size_t memSize);
+VFAPI void vfSetEntityAttribHandle(vfEntity* entity, vfHandle handle);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI void* vfGetBuffer(int type);

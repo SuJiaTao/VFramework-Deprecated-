@@ -1614,6 +1614,10 @@ VFAPI void vfInit(void)
 	_eCount  = 0;
 	_atCount = 0;
 
+	/* set first attribute to be empty */
+	vfAttributeTable attribTableDefault = { 0 };
+	vfAttribTableRegister(attribTableDefault);
+
 	/* init partition data */
 	_partitionsAllocated = VF_PART_COUNT_INCREMENT;
 	_partitionCount = 0;
@@ -1896,6 +1900,11 @@ VFAPI vfEntity* vfCreateEntity(vfLayer layer, vgShape shape,
 	vfBound* entBounds = rEnt->bounds;
 	entBounds->entity = rEnt;
 	rEnt->collisionCallback = NULL;
+	
+	/* set attributes data */
+	rEnt->attribHandle = 0;
+	rEnt->attribBlock  = NULL;
+	rEnt->getAttribute = getAttributeInternal;
 
 	/* set active last */
 	rEnt->active = TRUE;
@@ -1951,6 +1960,14 @@ VFAPI void vfDestroyParticle(vfParticle* particle)
 VFAPI void vfDestroyEntity(vfEntity* entity, int zero)
 {
 	captureMutex("Entity destruction timeout");
+
+	/* free entity attribute buffer (if exists) */
+	if (entity->attribBlock)
+	{
+		HeapFree(_heap, FALSE,
+			entity->attribBlock);
+	}
+	entity->attribBlock = NULL; /* zero block ptr */
 
 	/* get index and update buffer field */
 	int index = entity - _eBuffer;
@@ -2515,6 +2532,13 @@ VFAPI void vfAttribTableAdd(vfAttributeTable* target,
 	/* increment bytecount and attribcount */
 	target->attribByteCount += memSize;
 	target->attribCount++;
+}
+
+VFAPI void vfSetEntityAttribHandle(vfEntity* entity, vfHandle handle)
+{
+	entity->attribHandle = handle;
+	entity->attribBlock = HeapAlloc(_heap, HEAP_ZERO_MEMORY,
+		_atBuffer[handle].attribByteCount);
 }
 
 
