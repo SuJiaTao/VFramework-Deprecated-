@@ -203,7 +203,7 @@ static int _partitionsExtraRequested = 0;
 static int _partitionsMax = 0;
 
 /* GET BQ VEL MAG (gets speed heuristic for a given bq) */
-static float getBQVelMag(boundQuad* bq)
+static float getBQVelMag(boundQuad* bq, int minageCheck)
 {
 	if (bq->staticData.entity == NULL) return 0;
 
@@ -212,7 +212,8 @@ static float getBQVelMag(boundQuad* bq)
 	float velT = fabsf(bq->staticData.entity->physics.tourque);
 
 	/* if age is young, return positive num */
-	if (bq->staticData.entity->physics.age < VF_PART_SKIP_MINAGE)
+	if (bq->staticData.entity->physics.age < VF_PART_SKIP_MINAGE
+		&& minageCheck)
 	{
 		return 0xFF;
 	}
@@ -364,7 +365,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 		part->bqIndexes[part->bqCount] = bqIndex;
 
 		/* add velocity sum to it */
-		part->velSum += getBQVelMag(bq);
+		part->velSum += getBQVelMag(bq, TRUE);
 
 		/* return, since it's done */
 		part->bqCount++;
@@ -392,7 +393,7 @@ static inline void addToPartition(boundQuad* bq, int x, int y)
 	part->bqCount++;
 
 	/* add velocity sum to it */
-	part->velSum += getBQVelMag(bq);
+	part->velSum += getBQVelMag(bq, TRUE);
 }
 
 /* ASSIGN PARTITION */
@@ -1108,15 +1109,9 @@ static inline void updateCollisions(void)
 				if (sourcePtr->staticData.entity != NULL &&
 					targetPtr->staticData.entity != NULL)
 				{
-					/* if both velocities are zero, skip */
-					/* physics ages must also be mature, since newly */
-					/* spawned objects generally have 0 velocity */
-					ULONG64 sAge = sourcePtr->staticData.entity->physics.age;
-					ULONG64 tAge = targetPtr->staticData.entity->physics.age;
-					if (floorf(getBQVelMag(sourcePtr)) == 0 &&
-						floorf(getBQVelMag(targetPtr)) == 0 &&
-						sAge > VF_PART_SKIP_MINAGE &&
-						tAge > VF_PART_SKIP_MINAGE   ) continue;
+					if (floorf(getBQVelMag(sourcePtr, TRUE)) == 0 &&
+						floorf(getBQVelMag(targetPtr, TRUE)) == 0   )
+							continue;
 				}
 
 				/* perform collision check */
