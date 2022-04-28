@@ -21,6 +21,7 @@
 *		- Rendering functions
 *		- Physics functions
 *		- Particle functions
+*		- Attribute functions
 *		- Data related functions
 * 
 ******************************************************************************/
@@ -94,6 +95,7 @@
 #define VF_STATICCALLBACK_MAX 0x20
 
 #define VF_ATTRIBS_MAX 0xFF
+#define VF_ATTRIBTABLES_MAX 0x80
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
@@ -201,7 +203,7 @@ typedef struct vfAttributeTable
 	uint32_t attribNameHash  [VF_ATTRIBS_MAX]; /* attribute name hash     */
 	uint16_t attribByteOffset[VF_ATTRIBS_MAX]; /* memory block offset ptr */
 	uint16_t attribByteCount; /* bytes used */
-	uint8_t* memBlock; /* memory block */
+	uint8_t  attribCount;     /* attribs used */
 } vfAttributeTable;
 
 typedef struct vfEntity
@@ -219,8 +221,9 @@ typedef struct vfEntity
 	ENTCOLCALLBACK collisionCallback;
 	ENTUPDCALLBACK updateCallback;
 
-	vfAttributeTable attribTable;
-	ATTRIBGETFUNC    getAttribute;
+	vfHandle attribHandle;
+	uint8_t* attribBlock;
+	ATTRIBGETFUNC getAttribute;
 } vfEntity;
 
 /* MODULE INIT AND TERMINATE FUNCTIONS */
@@ -292,6 +295,11 @@ VFAPI void vfCreateParticleT(vgShape shape, vgTexture texture,
 	vfTransform transform, vfHandle behavior);
 VFAPI vfHandle vfCreateParticleBehavior(PARTUPDCALLBACK behavior);
 VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference);
+
+/* ATTRIBUTE RELATED FUNCTIONS */
+VFAPI vfHandle vfAttribTableRegister(vfAttributeTable toRegister);
+VFAPI void vfAttribTableAdd(vfAttributeTable* target,
+	const char* attributeName, size_t memSize);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI void* vfGetBuffer(int type);

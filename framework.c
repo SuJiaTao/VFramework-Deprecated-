@@ -11,12 +11,15 @@
 *		- Internal resources
 *		- Internal physics functions
 *		- Internal particle functions
+*		- Internal attribute functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
 *		- Struct related functions
 *		- Rendering functions
 *		- Physics functions
+*		- Particle functions
+*		- Attribute functions
 *		- Data functions
 *
 ******************************************************************************/
@@ -83,6 +86,10 @@ static int _eCount;
 static STATUPDCALLBACK _sCallBuff[VF_STATICCALLBACK_MAX];
 static int _sCallSize;
 static vfTickCount _tickCount = 0;
+
+/* ATTRIBUTE TABLE DATA */
+static vfAttributeTable _atBuffer[VF_ATTRIBTABLES_MAX];
+static int _atCount;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -1412,6 +1419,47 @@ static void updateParticles(void)
 	}
 }
 
+/* ========== INTERNAL ATTRIBUTE RELATED FUNCTIONS ========== */
+static uint32_t generateStringHash(const char* string)
+{
+	uint32_t hash = 0;
+	int counter = 0;
+	while (TRUE)
+	{
+		/* check for null terminate */
+		if (!string[counter]) break;
+
+		/* build unique string hash */
+		hash += string[counter] * (counter + 1);
+		counter++;
+	}
+	return hash;
+}
+
+static void* getAttributeInternal(vfEntity* target, const char* attribName)
+{
+	/* get name hash */
+	uint32_t nameHash = generateStringHash(attribName);
+
+	/* get entity attribute layout */
+	vfAttributeTable table = _atBuffer[target->attribHandle];
+
+	/* ensure attribute exists */
+	for (int i = 0; i < table.attribCount; i++)
+	{
+		/* on exists */
+		if (nameHash == table.attribNameHash[i])
+		{
+			/* get byte offset and return entity memory block + offset */
+			int byteOffset = table.attribByteOffset[i];
+			return target->attribBlock + byteOffset;
+		}
+	}
+
+	/* if loop broken, fail*/
+	return NULL;
+}
+
 /* ===== MODULE MAIN FUNCTION ===== */
 static DWORD WINAPI vfMain(void* params)
 {
@@ -1558,12 +1606,13 @@ VFAPI void vfInit(void)
 
 	/* init module internal data */
 	_sleepTime = 0;
-	_pEnabled = 0;
-	_tCount = 0;
-	_bCount = 0;
-	_pCount = 0;
+	_pEnabled  = 0;
+	_tCount  = 0;
+	_bCount  = 0;
+	_pCount  = 0;
 	_pbCount = 0;
-	_eCount = 0;
+	_eCount  = 0;
+	_atCount = 0;
 
 	/* init partition data */
 	_partitionsAllocated = VF_PART_COUNT_INCREMENT;
@@ -1573,6 +1622,9 @@ VFAPI void vfInit(void)
 	_partitionSize = VF_PART_SIZE_DEFAULT;
 	_partitionsExtraRequested = 0;
 	_partitionsMax = VF_PART_COUNT_MAXIMUM;
+
+	/* clear attribute table data */
+	ZeroMemory(_atBuffer, sizeof(_atBuffer));
 
 	/* init mutexs */
 	_writeMutex = CreateMutexW(NULL, FALSE, NULL);
@@ -2438,6 +2490,35 @@ VFAPI vfHandle vfCreateParticleBehaviorP(vfParticleBehavior reference)
 
 	return pbRef - _pbBuffer; /* return index */
 }
+
+/* ========== ATTRIBUTE RELATED FUNCTIONS ========== */
+
+VFAPI vfHandle vfAttribTableRegister(vfAttributeTable toRegister)
+{
+	/* check max attribute tables registerd */
+	if (_atCount >= VF_ATTRIBTABLES_MAX) return -1;
+
+	_atBuffer[_atCount++] = toRegister;
+	return _atCount - 1;
+}
+
+VFAPI void vfAttribTableAdd(vfAttributeTable* target,
+	const char* attributeName, size_t memSize)
+{
+	/* get current attribute index */
+	int attribIndex = target->attribCount;
+
+	/* generate name and byte offset */
+	target->attribNameHash[attribIndex] = generateStringHash(attributeName);
+	target->attribByteOffset[attribIndex] = target->attribByteCount;
+	
+	/* increment bytecount and attribcount */
+	target->attribByteCount += memSize;
+	target->attribCount++;
+}
+
+
+/* ========= DATA RELATED FUNCTION ========== */
 
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize)
