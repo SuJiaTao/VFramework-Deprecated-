@@ -121,6 +121,8 @@ typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
 typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* thisBehavior,
 	vfLifeTime particleAge);
 typedef void* (*ATTRIBGETFUNC)(struct vfEntity* source, const char* attributeName);
+typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile projectile,
+	struct vfEntity* hitObject);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -197,6 +199,45 @@ typedef struct vfParticle
 
 	vfParticleBehavior behavior; /* particle behavior */
 } vfParticle;
+
+typedef struct vfProjectileBehavior
+{
+	vgShape shape;     /* projectile shape   */
+	vgTexture texture; /* projectile texture */
+
+	uint8_t penetrationPower; /* # of objects projectile can pass through */
+	float penetrationChance;  /* percent of penetration */
+	float scatterMagnitude;   /* direction change per penetration */
+
+	float accuracy; /* random offset on projectile creation */
+	
+	float speed; /* projectile speed */
+	float speedVariation; /* random speed offset */
+
+	float scale; /* shape scale */
+	float scaleVariation; /* random scale offset */
+
+	/* collision callback */
+	PROJTILECOLCALLBACK collisionCallback;
+
+	vfLifeTime maxAge; /* max time allowed to live */
+
+} vfProjectileBehavior;
+
+typedef struct vfProjectile
+{
+	/* object that projectile originated from */
+	vfEntity* source;
+
+	/* amount of objects projectile has passed through */
+	uint8_t penetrations;
+	
+	float angle;       /* projectile movement angle */
+	vfVector position; /* projectile position */
+	vfLifeTime age;    /* projectile age */
+
+	vfHandle behaviorHandle; /* projectile behavior */
+} vfProjectile;
 
 typedef struct vfAttributeTable
 {
