@@ -22,6 +22,7 @@
 *		- Physics functions
 *		- Particle functions
 *		- Attribute functions
+*		- Projectile functions
 *		- Data related functions
 * 
 ******************************************************************************/
@@ -121,8 +122,9 @@ typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
 typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* thisBehavior,
 	vfLifeTime particleAge);
 typedef void* (*ATTRIBGETFUNC)(struct vfEntity* source, const char* attributeName);
-typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile projectile,
+typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile* projectile,
 	struct vfEntity* hitObject);
+typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile* projectile);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -207,22 +209,35 @@ typedef struct vfProjectileBehavior
 
 	uint8_t pelletCount; /* amount of pellets shot at once */
 
+	vfFlag nonEntityPenetration : 1; /* ability to penetrate non entities */
+	vfFlag infinitePenetration  : 1; /* unstoppable projectile            */
+	vfFlag useShrapnel : 1;          /* creates shrapnel upon collision   */
+
 	uint8_t penetrationPower;     /* bounds projectile can pass through */
-	vfFlag  nonEntityPenetration; /* ability to penetrate non entities  */
-	float   penetrationChance;    /* percent of penetration */
-	float   scatterMagnitude;     /* direction change per penetration */
+ 	float   penetrationChance;    /* percent of penetration             */
+	float   scatterMagnitude;     /* direction change per penetration   */
+
+	vfHandle shrapnelBehavior; /* shrapnel behavior        */
+	float    shrapnelChance;   /* shrapnel chance 0f - 1f  */
+	uint8_t  shrapnelCount;    /* shrapnel per penetration */
+	uint8_t  shrapnelFalloff;  /* shrapnel decrease per penetration */
 
 	float spread; /* random rotation offset on projectile creation */
 	
-	float speed; /* projectile speed */
+	float speed;          /* projectile speed    */
 	float speedVariation; /* random speed offset */
-	float drag;  /* speed slowdown amount */
 
-	float scale; /* shape scale */
-	float scaleVariation; /* random scale offset */
+	float drag;          /* speed slowdown amount */
+	float dragVariation; /* slowdown variation */
+
+	float shapeScale; /* shape scale */
+	float boundScale; /* bounding box scale */
+	float scaleVariation; /* shape and bound scale variation */
 
 	/* collision callback */
 	PROJTILECOLCALLBACK collisionCallback;
+	/* max time callback (projectile is still flying but max age reached) */
+	PROJTILMAXAGECALLBACK maxAgeCallback;
 
 	vfLifeTime maxAge; /* max time allowed to live */
 	vfLifeTime maxAgeVariation; /* max time variation */
@@ -237,7 +252,7 @@ typedef struct vfProjectile
 	/* amount of objects projectile has passed through */
 	uint8_t penetrations;
 	
-	float angle;       /* projectile movement angle */
+	vfVector movement; /* projectile movement vector */
 	vfVector position; /* projectile position */
 	vfLifeTime age;    /* projectile age */
 
@@ -351,6 +366,16 @@ VFAPI vfHandle vfAttribTableRegister(vfAttributeTable toRegister);
 VFAPI void vfAttribTableAdd(vfAttributeTable* target,
 	const char* attributeName, size_t memSize);
 VFAPI void vfSetEntityAttribHandle(vfEntity* entity, vfHandle handle);
+
+/* PROJECTILE RELATED FUNCTIONS */
+VFAPI vfHandle vfCreateProjectileBehavior(vgShape shape, vgTexture texture,
+	uint8_t penetrationPower, float speed, float scale, vfLifeTime lifeTime);
+VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate);
+VFAPI vfProjectileBehavior vfGetProjectileBehavior(vfHandle pbHandle);
+VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
+	vfVector direction);
+VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
+	float direction);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI void* vfGetBuffer(int type);
