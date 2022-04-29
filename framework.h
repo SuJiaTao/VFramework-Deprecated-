@@ -191,9 +191,9 @@ typedef struct vfParticle
 	vfLifeTime lifeTime;  /* time allowed to live (in pticks) */
 	vfLifeTime lifeAge;   /* time particle has existed (int pticks) */
 
-	vgShape shape;     /* shape   */
-	vgTexture texture; /* texture */
-	vfColor filter;    /* filter  */
+	vgShape   shape;     /* shape   */
+	vgTexture texture;   /* texture */
+	vfColor   filter;    /* filter  */
 
 	vfTransform transform; /* transform data */
 
@@ -202,17 +202,21 @@ typedef struct vfParticle
 
 typedef struct vfProjectileBehavior
 {
-	vgShape shape;     /* projectile shape   */
+	vgShape   shape;   /* projectile shape   */
 	vgTexture texture; /* projectile texture */
 
-	uint8_t penetrationPower; /* # of objects projectile can pass through */
-	float penetrationChance;  /* percent of penetration */
-	float scatterMagnitude;   /* direction change per penetration */
+	uint8_t pelletCount; /* amount of pellets shot at once */
 
-	float accuracy; /* random offset on projectile creation */
+	uint8_t penetrationPower;     /* bounds projectile can pass through */
+	vfFlag  nonEntityPenetration; /* ability to penetrate non entities  */
+	float   penetrationChance;    /* percent of penetration */
+	float   scatterMagnitude;     /* direction change per penetration */
+
+	float spread; /* random rotation offset on projectile creation */
 	
 	float speed; /* projectile speed */
 	float speedVariation; /* random speed offset */
+	float drag;  /* speed slowdown amount */
 
 	float scale; /* shape scale */
 	float scaleVariation; /* random scale offset */
@@ -221,13 +225,14 @@ typedef struct vfProjectileBehavior
 	PROJTILECOLCALLBACK collisionCallback;
 
 	vfLifeTime maxAge; /* max time allowed to live */
+	vfLifeTime maxAgeVariation; /* max time variation */
 
 } vfProjectileBehavior;
 
 typedef struct vfProjectile
 {
 	/* object that projectile originated from */
-	vfEntity* source;
+	struct vfEntity* source;
 
 	/* amount of objects projectile has passed through */
 	uint8_t penetrations;
