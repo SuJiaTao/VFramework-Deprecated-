@@ -12,6 +12,7 @@
 *		- Internal physics functions
 *		- Internal particle functions
 *		- Internal attribute functions
+*		- Internal projectile functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
@@ -20,6 +21,7 @@
 *		- Physics functions
 *		- Particle functions
 *		- Attribute functions
+*		- Projectile functions
 *		- Data functions
 *
 ******************************************************************************/
@@ -90,6 +92,13 @@ static vfTickCount _tickCount = 0;
 /* ATTRIBUTE TABLE DATA */
 static vfAttributeTable _atBuffer[VF_ATTRIBTABLES_MAX];
 static int _atCount;
+
+/* PROJECTILE DATA */
+static vfProjectileBehavior _projBBuffer[VF_PROJBEHAVIORS_MAX];
+static int _projBCount;
+static vfProjectile* _projBuffer; static field* _projBufferField;
+static int _projAllocated;
+static int _projCount;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -1455,7 +1464,166 @@ static void* getAttributeInternal(vfEntity* target, const char* attribName)
 	return NULL;
 }
 
-/* ===== MODULE MAIN FUNCTION ===== */
+/* ========== INTERNAL PROJECTILE FUNCTIONS ========== */
+
+static inline void ensureProjectileBufferSize(void)
+{
+	/* check if projectile buffer must be increased */
+	if (_projCount > _projAllocated - VF_PROJCOUNT_CHANGETHRES)
+	{
+		/* increment projbuffer size */
+		int oldSize = _projAllocated;
+		_projAllocated += VF_PROJCOUNT_STEP;
+
+		/* reallocate projectile buffer */
+		void* temp = vAlloc(sizeof(vfProjectile) * _projAllocated, FALSE);
+		memcpy(temp, _projBuffer, sizeof(vfProjectile) * oldSize);
+		vFree(_projBuffer);
+		_projBuffer = temp;
+	}
+
+	/* check if projectile buffer must be decreased */
+	if (_projCount < _projAllocated - VF_PROJCOUNT_CHANGETHRES
+		- VF_PROJCOUNT_STEP && _projCount >= VF_PROJCOUNT_DEFAULT)
+	{
+		/* decrement projbuffer size */
+		_projAllocated -= VF_PROJCOUNT_STEP;
+
+		/* reallocate projectile buffer */
+		void* temp = vAlloc(sizeof(vfProjectile) * _projAllocated, FALSE);
+		memcpy(temp, _projBuffer, sizeof(vfProjectile) * _projAllocated);
+		vFree(_projBuffer);
+		_projBuffer = temp;
+	}
+}
+
+static int __randTable[] = /* random table */
+{
+	48, 00, 22, 31, 63, 57, 49, 91,
+	25, 89, 19, 49, 75, 68, 24, 86,
+	53, 84, 41, 23, 76, 35, 89, 60,
+	86, 73, 98, 48, 82, 28, 57, 30,
+	68, 48, 78, 21, 81, 83, 56, 78,
+	27, 67,  9, 27, 43, 60, 84, 80,
+	33, 43, 88, 61, 61, 52, 40, 54,
+	70, 93, 91, 27, 99, 96, 44, 86,
+	55, 82, 25, 05, 68, 57, 36, 24,
+	37, 85, 68, 44, 64, 93,  8, 36,
+	51, 90, 04, 48, 84,  9, 44, 95,
+	96, 18, 68, 11, 99, 80,  8, 21,
+	06, 48, 86, 67, 89, 38, 31, 41,
+	13, 24, 35, 43, 59, 64, 21, 03,
+	16, 74, 54, 95, 26, 43, 58, 02,
+	04, 89, 15, 48, 34, 40,  9, 97
+};
+
+static inline int seededRandomUINT(int seed)
+{
+	return __randTable[seed % (sizeof(__randTable) /
+		sizeof(__randTable[0]))];
+}
+
+static inline int seededRandomINT(int seed)
+{
+	int randVal = seededRandomUINT(seed);
+	randVal -= 50;
+	randVal *= 2;
+	return randVal;
+}
+
+static inline float seededRandomNORMALIZED(int seed)
+{
+	float percent = (float)seededRandomINT(seed);
+	return percent /= 100.0f;
+}
+
+static inline float seededRandomFLOAT(int seed, float clamp)
+{
+	return seededRandomNORMALIZED(seed) * clamp;
+}
+
+static int __randSeed = 0;
+static inline float randomFLOAT(float clamp)
+{
+	return seededRandomFLOAT(__randSeed++, clamp);
+}
+
+static inline vfVector cartesianToPolar(vfVector src)
+{
+	vfVector polar;
+	polar.x = vectorMagnitude(src);
+	polar.y = atan2f(src.y, src.x);
+	return polar;
+}
+
+/* PROJECTILE UPDATE FUNCTION */
+static void updateProjectiles(void)
+{
+	int counter = 0;
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		if (counter >= _projBCount) break; /* on checked all, break */
+
+		if (!_projBufferField[i]) continue; /* on empty, continue */
+
+		/* get projectile and behavior */
+		vfProjectile* proj = _projBuffer + i;
+		vfProjectileBehavior projBhv = _projBBuffer[proj->behaviorHandle];
+
+		/* get projectile partition */
+		int partX; int partY;
+		if (proj->position.x > 0)
+			partX = proj->position.x / (float)_partitionSize;
+		else
+			partX = floorf(proj->position.x / (float)_partitionSize);
+
+		if (proj->position.y > 0)
+			partY = proj->position.y / (float)_partitionSize;
+		else
+			partY = floorf(proj->position.y / (float)_partitionSize);
+
+		/* get partition (if exists) */
+		partition* colPart = NULL;
+		for (int j = 0; j < _partitionCount; j++)
+		{
+			/* if not found, continue */
+			if (_partBuff[j].x != partX ||
+				_partBuff[j].y != partY) continue;
+
+			/* on found, set and break */
+			colPart = _partBuff + j;
+			break;
+		}
+
+
+		/* for every bound in partition, check for collision */
+		for (int j = 0; colPart && j < colPart->bqCount; j++)
+		{
+			vfBound* checkBound = _bBuffer + colPart->bqIndexes[j];
+			if (vfCheckPointOverlap(proj->position, checkBound,
+				projBhv.boundScale)) {
+				if (checkBound->entity)
+				{
+					printf("%d: collided with entity: %d\n", _tickCount,
+						vfGetEntityHandle(checkBound->entity));
+				}
+			}
+		}
+
+		/* move projectile */
+		proj->position = vectorAdd(proj->position, proj->movement);
+	}
+}
+
+static inline vfVector polarToCartestian(float r, float theta)
+{
+	vfVector cart;
+	cart.x = r * cosf(theta);
+	cart.y = r * sinf(theta);
+	return cart;
+}
+
+/* ============ MODULE MAIN FUNCTION ============ */
 static DWORD WINAPI vfMain(void* params)
 {
 	ULONGLONG lastTime = 0;
@@ -1531,6 +1699,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			/* handle velocity changes from collisions */
 			updateCollisionVelocities();
+
+			/* update projectiles */
+			updateProjectiles();
 
 			/* update phyiscs ages */
 			updatePhyiscsAges();
@@ -1608,6 +1779,7 @@ VFAPI void vfInit(void)
 	_pbCount = 0;
 	_eCount  = 0;
 	_atCount = 0;
+	_projCount = 0; _projBCount = 0;
 
 	/* set first attribute to be empty */
 	vfAttributeTable attribTableDefault = { 0 };
@@ -1670,6 +1842,13 @@ VFAPI void vfInit(void)
 		TRUE);
 	_eBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
 		TRUE);
+
+	/* INIT PROJECTILE BUFFER */
+	_projBuffer = vAlloc(sizeof(vfProjectile) * VF_PROJCOUNT_DEFAULT,
+		TRUE);
+	_projBufferField = vAlloc(sizeof(field) * VF_PROJCOUNT_DEFAULT,
+		TRUE);
+	_projAllocated = VF_PROJCOUNT_DEFAULT;
 
 	/* init module main thread */
 	_killSignal   = FALSE;
@@ -2356,6 +2535,25 @@ VFAPI void vfRenderPartitions(void)
 	ReleaseMutex(_drawMutex);
 }
 
+VFAPI void vfRenderProjectiles(void)
+{
+	if (vgGetRenderSkipState()) return;
+
+	vgRenderLayer(0);
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		if (!_projBufferField[i]) continue; /* on unused, continue */
+		
+		/* get object data */
+		vfProjectile* proj = _projBuffer + i;
+		vfProjectileBehavior* pb = _projBBuffer + proj->behaviorHandle;
+
+		vgUseTexture(pb->texture);
+		vgDrawShapeTextured(pb->shape, proj->position.x,
+			proj->position.y, 0, pb->shapeScale);
+	}
+}
+
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value)
 {
@@ -2467,6 +2665,40 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 	fprintf(file, "Time taken to calculate: %d ms\n",
 		_pCollisionCheckTime);
 	fflush(file);
+}
+
+VFAPI int vfCheckPointOverlap(vfVector point, vfBound* bound,
+	float leniency)
+{
+	/* make bound origin point */
+	point.x -= bound->body->position.x;
+	point.y -= bound->body->position.y;
+
+	/* rotate and scale point so that coordinate frame is relative */
+	/* to bound */
+	point = vertRotateScale(point, -bound->body->rotation,
+		1.0f / bound->body->scale);
+
+	/* check for overlap */
+	int overlapCheck = 0;
+
+	/* get min and max of all bound vertexes */
+	float xMin = min(bound->position.x,
+		bound->position.x + bound->dimensions.x);
+	float xMax = max(bound->position.x,
+		bound->position.x + bound->dimensions.x);
+	float yMin = min(bound->position.y,
+		bound->position.y + bound->dimensions.y);
+	float yMax = max(bound->position.y,
+		bound->position.y + bound->dimensions.y);
+
+	/* test for overlap */
+	if (point.x > xMin - leniency) overlapCheck++;
+	if (point.x < xMax + leniency) overlapCheck++;
+	if (point.y > yMin - leniency) overlapCheck++;
+	if (point.y < yMax + leniency) overlapCheck++;
+
+	return (overlapCheck == 4);
 }
 
 /* ========== PARTICLE RELATED FUNCTIONS ========== */
@@ -2592,8 +2824,119 @@ VFAPI void vfSetEntityAttribHandle(vfEntity* entity, vfHandle handle)
 		_atBuffer[handle].attribByteCount);
 }
 
+/* ========== PROJECTILE RELATED FUNCTIONS ========== */
+VFAPI vfHandle vfCreateProjectileBehavior(vgShape shape, vgTexture texture,
+	uint8_t penetrationPower, float speed, float scale, vfLifeTime lifeTime)
+{
+	/* full check */
+	if (_projBCount >= VF_PROJBEHAVIORS_MAX) return -1;
 
-/* ========= DATA RELATED FUNCTION ========== */
+	/* get next projectile behavior and zero memory */
+	vfProjectileBehavior* pbh = _projBBuffer + _projBCount;
+	ZeroMemory(pbh, sizeof(vfProjectileBehavior));
+
+	/* set all values */
+	pbh->shape = shape;
+	pbh->texture = texture;
+	pbh->penetrationPower = penetrationPower;
+	pbh->speed = speed;
+	pbh->shapeScale = 1;
+	pbh->boundScale = scale;
+	pbh->maxAge = lifeTime;
+
+	/* increment count and return */
+	_projBCount++;
+	return pbh - _projBBuffer;
+}
+
+VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate)
+{
+	/* full check */
+	if (_projBCount >= VF_PROJBEHAVIORS_MAX) return -1;
+
+	/* get next projectile behavior and zero memory */
+	vfProjectileBehavior* pbh = _projBBuffer + _projBCount;
+	ZeroMemory(pbh, sizeof(vfProjectileBehavior));
+
+	/* copy over data */
+	*pbh = toCreate;
+
+	/* increment count and return */
+	_projBCount++;
+	return pbh - _projBBuffer;
+}
+
+VFAPI vfProjectileBehavior vfGetProjectileBehavior(vfHandle pbHandle)
+{
+	return _projBBuffer[pbHandle];
+}
+
+VFAPI vfProjectileBehavior* vfGetProjectileBehaviorPTR(vfHandle pbHandle)
+{
+	return (_projBBuffer + pbHandle);
+}
+
+VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
+	vfVector direction)
+{
+	vfVector polar = cartesianToPolar(direction);
+	vfCreateProjectileR(source, behavior, polar.y);
+}
+
+VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
+	float direction)
+{
+	/* get write mutex */
+	int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+		"Projectile Creation");
+
+	/* make sure projectile buffer is big enough */
+	ensureProjectileBufferSize();
+
+	/* search for free projectile */
+	int startIndex = _projCount / 2;
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		int indexActual = (startIndex + i) % _projAllocated;
+
+		/* if taken, skip */
+		if (_projBufferField[indexActual]) continue;
+
+		/* on free buffer spot */
+		_projBufferField[indexActual] = 1; /* mark used */
+		vfProjectile* proj = _projBuffer + indexActual; /* get proj ptr */
+
+		/* get behavior */
+		vfProjectileBehavior pb = _projBBuffer[behavior];
+
+		/* set values */
+		proj->age = 0;
+		proj->penetrations = 0;
+		proj->lastPenetrated = NULL;
+
+		proj->behaviorHandle = behavior;
+		proj->source = source;
+		proj->position = source->transform->position;
+
+		/* randomize angle */
+		direction += seededRandomFLOAT(indexActual, pb.spread);
+		float speed = pb.speed + seededRandomFLOAT(indexActual,
+			pb.speedVariation);
+		proj->movement = polarToCartestian(speed, direction);
+
+		/* increment projectile count */
+		_projCount++;
+
+		break;
+	}
+
+	/* release write mutex */
+	ReleaseMutex(_writeMutex);
+}
+
+
+/* ========= DATA RELATED FUNCTIONS ========== */
 
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize)

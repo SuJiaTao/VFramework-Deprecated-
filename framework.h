@@ -98,6 +98,11 @@
 #define VF_ATTRIBS_MAX 0xFF
 #define VF_ATTRIBTABLES_MAX 0x80
 
+#define VF_PROJBEHAVIORS_MAX 0xFF
+#define VF_PROJCOUNT_DEFAULT 0x400
+#define VF_PROJCOUNT_STEP    0x200
+#define VF_PROJCOUNT_CHANGETHRES 0x40
+
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
 #define COLORA(r, g, b, a)     vfCreateColor(r, g, b, a)
@@ -122,9 +127,9 @@ typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
 typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* thisBehavior,
 	vfLifeTime particleAge);
 typedef void* (*ATTRIBGETFUNC)(struct vfEntity* source, const char* attributeName);
-typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile* projectile,
+typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile projectile,
 	struct vfEntity* hitObject);
-typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile* projectile);
+typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile projectile);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -213,9 +218,9 @@ typedef struct vfProjectileBehavior
 	vfFlag infinitePenetration  : 1; /* unstoppable projectile            */
 	vfFlag useShrapnel : 1;          /* creates shrapnel upon collision   */
 
-	uint8_t penetrationPower;     /* bounds projectile can pass through */
- 	float   penetrationChance;    /* percent of penetration             */
-	float   scatterMagnitude;     /* direction change per penetration   */
+	uint8_t penetrationPower;   /* bounds projectile can pass through */
+ 	float   penetrationChance;  /* percent of penetration             */
+	float   penetrationScatter; /* direction change per penetration   */
 
 	vfHandle shrapnelBehavior; /* shrapnel behavior        */
 	float    shrapnelChance;   /* shrapnel chance 0f - 1f  */
@@ -248,6 +253,9 @@ typedef struct vfProjectile
 {
 	/* object that projectile originated from */
 	struct vfEntity* source;
+
+	/* last object that projectile penetrated */
+	struct vfEntity* lastPenetrated;
 
 	/* amount of objects projectile has passed through */
 	uint8_t penetrations;
@@ -333,6 +341,7 @@ VFAPI void vfRenderParticles(void);
 VFAPI void vfRenderEntities(void);
 VFAPI void vfRenderBounds(void);
 VFAPI void vfRenderPartitions(void);
+VFAPI void vfRenderProjectiles(void);
 
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);
@@ -350,6 +359,8 @@ VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize);
 VFAPI void vfLogPhysicsPartitionData(FILE* file);
 VFAPI void vfLogPhysicsCollisionData(FILE* file);
+VFAPI int vfCheckPointOverlap(vfVector point, vfBound* bound,
+	float leniency);
 
 /* PARTICLE RELATED FUNCTIONS */
 VFAPI void vfCreateParticle(vgShape shape, vgTexture texture,
@@ -371,7 +382,8 @@ VFAPI void vfSetEntityAttribHandle(vfEntity* entity, vfHandle handle);
 VFAPI vfHandle vfCreateProjectileBehavior(vgShape shape, vgTexture texture,
 	uint8_t penetrationPower, float speed, float scale, vfLifeTime lifeTime);
 VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate);
-VFAPI vfProjectileBehavior vfGetProjectileBehavior(vfHandle pbHandle);
+VFAPI vfProjectileBehavior  vfGetProjectileBehavior(vfHandle pbHandle);
+VFAPI vfProjectileBehavior* vfGetProjectileBehaviorPTR(vfHandle pbHandle);
 VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
 	vfVector direction);
 VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
