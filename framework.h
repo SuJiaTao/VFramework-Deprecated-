@@ -131,9 +131,10 @@ typedef void (*STATUPDCALLBACK)(vfTickCount tickCount);
 typedef void (*PARTUPDCALLBACK)(struct vfParticleBehavior* thisBehavior,
 	vfLifeTime particleAge);
 typedef void* (*ATTRIBGETFUNC)(struct vfEntity* source, const char* attributeName);
-typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile projectile,
+typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile* projectile,
 	struct vfEntity* hitObject);
-typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile projectile);
+typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile* projectile);
+typedef PROJTILMAXAGECALLBACK PROJTILESTOPMOVECALLBACK;
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -221,7 +222,8 @@ typedef struct vfProjectileBehavior
 	vfFlag nonEntityPenetration : 1; /* ability to penetrate non entities */
 	vfFlag infinitePenetration  : 1; /* unstoppable projectile            */
 	vfFlag useShrapnel : 1;          /* creates shrapnel upon collision   */
-	vfFlag invisible   : 1;          /* should projectile be rendered */
+	vfFlag invisible   : 1;          /* should projectile be rendered     */
+	vfFlag destroyOnStopMoving  : 1; /* destroy once velocity is 0        */
 
 	uint8_t penetrationPower;   /* bounds projectile can pass through */
  	float   penetrationChance;  /* percent of penetration             */
@@ -244,10 +246,15 @@ typedef struct vfProjectileBehavior
 	float shapeScale; /* shape scale */
 	float boundScale; /* bounding box scale */
 
+	float stopMoveThresh; /* movement stop threshold */
+
 	/* collision callback */
 	PROJTILECOLCALLBACK collisionCallback;
 	/* max time callback (projectile is still flying but max age reached) */
 	PROJTILMAXAGECALLBACK maxAgeCallback;
+	/* stop callback */
+	PROJTILESTOPMOVECALLBACK stopMoveCallback;
+	
 
 	vfLifeTime maxAge; /* max time allowed to live */
 	vfLifeTime maxAgeVariation; /* max time variation */

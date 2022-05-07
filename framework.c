@@ -1682,7 +1682,7 @@ static vfBound* checkProjectileCollide(vfProjectile* proj)
 			{
 				/* do callback */
 				if (pb.collisionCallback)
-					pb.collisionCallback(*proj, checkBound->entity);
+					pb.collisionCallback(proj, checkBound->entity);
 				/* set new final position */
 				proj->position = positionFinal;
 				return checkBound;
@@ -1718,7 +1718,7 @@ static void updateProjectiles(void)
 		{
 			/* do callback */
 			if (pb.maxAgeCallback)
-				pb.maxAgeCallback(*proj);
+				pb.maxAgeCallback(proj);
 			/* set flag and decrement count */
 			_projBufferField[i] = 0;
 			_projCount--;
@@ -1726,6 +1726,27 @@ static void updateProjectiles(void)
 
 		/* increase projectile age */
 		proj->age++;
+
+		/* apply drag to projectile */
+		float dragVariation = seededRandomFLOAT(_projBuffer - proj,
+			pb.dragVariation);
+		proj->movement.x *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
+		proj->movement.y *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
+
+		/* if stopped moving, destroy */
+		if (pb.destroyOnStopMoving &&
+			floorf(fabsf(proj->movement.x)) <= pb.stopMoveThresh &&
+			floorf(fabsf(proj->movement.y)) <= pb.stopMoveThresh   )
+		{
+			/* try callback */
+			if (pb.stopMoveCallback)
+				pb.stopMoveCallback(proj);
+
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
+			continue;
+		}
 
 		/* get collided bound of projectile */
 		vfBound* collisionBound = checkProjectileCollide(proj);
@@ -1767,7 +1788,7 @@ static void updateProjectiles(void)
 
 		/* call collision callback */
 		if (pb.collisionCallback)
-			pb.collisionCallback(*proj, collisionBound->entity);
+			pb.collisionCallback(proj, collisionBound->entity);
 
 		/* if there's an entity attatched to the bound, set */
 		/* entity to new last collided */
@@ -1821,15 +1842,6 @@ static void updateProjectiles(void)
 			_projBufferField[i] = 0;
 			_projCount--;
 		}
-
-		/* move projectile */
-		proj->position = vectorAdd(proj->position, proj->movement);
-
-		/* apply drag to projectile */
-		float dragVariation = seededRandomFLOAT(_projBuffer - proj,
-			pb.dragVariation);
-		proj->movement.x *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
-		proj->movement.y *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
 	}
 }
 
@@ -2772,6 +2784,7 @@ VFAPI void vfRenderProjectiles(void)
 		vfProjectileBehavior* pb = _projBBuffer + proj->behaviorHandle;
 
 		/* check if should be rendered */
+		if (pb->invisible) continue;
 		if (proj->age < pb->renderAgeStart) continue;
 
 		vgUseTexture(pb->texture);
