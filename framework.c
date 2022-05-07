@@ -2765,6 +2765,64 @@ VFAPI void vfRenderPartitions(void)
 	ReleaseMutex(_drawMutex);
 }
 
+static void renderProjectileTrailAlphaGroup(int aMin, int aMax)
+{
+	/* NEXT, RENDER ALL TRAILS */
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		/* on unused, skip */
+		if (!_projBufferField[i]) continue;
+
+		/* get object data */
+		vfProjectile* proj = _projBuffer + i;
+		vfProjectileBehavior* pb = _projBBuffer + proj->behaviorHandle;
+
+		/* on no trail, skip */
+		if (!pb->renderTrail) continue;
+
+		/* check if should be rendered */
+		if (pb->invisible) continue;
+		if (proj->age < pb->renderAgeStart) continue;
+
+		vgTextureFilterReset();
+		vgUseTexture(pb->texture);
+
+		/* render in decreasing alpha order */
+		vfVector renderPos = proj->position;
+		for (int i = 0; i < pb->renderTrail; i++)
+		{
+			/* get trail alpha */
+			int renderAlpha = max(0,
+				255 - (pb->renderTrailAlphaFalloff * i));
+
+			/* check if out of view */
+			if (!vgCheckIfViewable(proj->position.x, proj->position.y,
+				VF_PROJECTILE_CULLEXTRA)) continue;
+
+			/* check if should alpha skip*/
+			if (renderAlpha == 0   ||
+				renderAlpha > aMax ||
+				renderAlpha < aMin) continue;
+
+			/* set filter */
+			vgTextureFilter(255, 255, 255,
+				renderAlpha);
+
+			/* decrement draw position */
+			float lagX = proj->movement.x / pb->shapeScale;
+			float lagY = proj->movement.y / pb->shapeScale;
+			renderPos.x -= lagX * pb->renderTrailLag;
+			renderPos.y -= lagY * pb->renderTrailLag;
+
+			/* draw trail */
+			float renderScale = max(0, pb->shapeScale -
+				pb->renderTrailScaleFalloff * i);
+			vgDrawShapeTextured(pb->shape, renderPos.x,
+				renderPos.y, 0, renderScale);
+		}
+	}
+}
+
 VFAPI void vfRenderProjectiles(void)
 {
 	if (vgGetRenderSkipState()) return;
@@ -2775,6 +2833,7 @@ VFAPI void vfRenderProjectiles(void)
 		showMutexError("Write Mutex", "Could not draw projectiles!");
 
 	vgRenderLayer(0);
+	/* FIRST, RENDER ALL PROJECTILES */
 	for (int i = 0; i < _projAllocated; i++)
 	{
 		if (!_projBufferField[i]) continue; /* on unused, continue */
@@ -2791,29 +2850,12 @@ VFAPI void vfRenderProjectiles(void)
 		vgUseTexture(pb->texture);
 		vgDrawShapeTextured(pb->shape, proj->position.x,
 			proj->position.y, 0, pb->shapeScale);
-
-		/* check if should render trail*/
-		if (pb->renderTrail)
-		{
-			/* render in decreasing alpha order */
-			vfVector renderPos = proj->position;
-			for (int i = 0; i < pb->renderTrail; i++)
-			{
-				/* set filter */
-				vgTextureFilter(255, 255, 255,
-					255 - ((255 / pb->renderTrail) * i));
-
-				/* decrement draw position */
-				renderPos.x -= proj->movement.x / pb->shapeScale;
-				renderPos.y -= proj->movement.y / pb->shapeScale;
-
-				/* render trail */
-				vgDrawShapeTextured(pb->shape, renderPos.x,
-					renderPos.y, 0, pb->shapeScale);
-			}
-		}
-		
 	}
+
+	/* RENDER TRAIL ALPHA GROUPS */
+	renderProjectileTrailAlphaGroup(0x80, 0xFF);
+	renderProjectileTrailAlphaGroup(0x20, 0x80);
+	renderProjectileTrailAlphaGroup(0x00, 0x20);
 
 	/* release write mutex */
 	ReleaseMutex(_writeMutex);
@@ -3141,14 +3183,14 @@ VFAPI vfProjectileBehavior* vfGetProjectileBehaviorPTR(vfHandle pbHandle)
 	return (_projBBuffer + pbHandle);
 }
 
-VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
+VFAPI vfHandle vfCreateProjectileV(vfEntity* source, vfHandle behavior,
 	vfVector direction)
 {
 	vfVector polar = cartesianToPolar(direction);
-	vfCreateProjectileR(source, behavior, polar.y * 57.2958f);
+	return vfCreateProjectileR(source, behavior, polar.y * 57.2958f);
 }
 
-static void createProjectileSingle(vfEntity* source,
+static vfHandle createProjectileSingle(vfEntity* source,
 	vfProjectileBehavior pb, vfHandle pbh,  float angle)
 {
 	/* make sure projectile buffer is big enough */
@@ -3201,18 +3243,26 @@ static void createProjectileSingle(vfEntity* source,
 		/* increment projectile count */
 		_projCount++;
 
-		break;
+		return indexActual;
 	}
 }
 
-VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
+VFAPI vfHandle vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 	float direction)
 {
 	vfProjectileBehavior pb = _projBBuffer[behavior];
+	vfHandle returnValue = 0;
 	for (int i = 0; i < pb.pelletCount; i++)
 	{
-		createProjectileSingle(source, pb, behavior, direction);
+		int temp = createProjectileSingle(source, pb, behavior, direction);
+		if (i == 0) returnValue = temp;
 	}
+	return returnValue;
+}
+
+VFAPI vfProjectile* vfGetProjectile(vfHandle handle)
+{
+	return _projBuffer + handle;
 }
 
 

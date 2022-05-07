@@ -54,6 +54,7 @@
 #define VF_PARTICLE_CULLEXTRA    0.05f
 #define VF_PARTICLE_DESTROYEXTRA 1.5f
 #define VF_ENTITY_CULLEXTRA      0.25f
+#define VF_PROJECTILE_CULLEXTRA  0.025f
 
 #define VF_WMUTEX_TIMEOUT 0xFF
 #define VF_RMUTEX_TIMEOUT 0xFF
@@ -259,7 +260,10 @@ typedef struct vfProjectileBehavior
 	vfLifeTime maxAgeVariation; /* max time variation */
 
 	vfLifeTime renderAgeStart; /* age to start rendering */
-	uint8_t    renderTrail;    /* amount of "copies" to trail behind */
+	uint8_t    renderTrail;    /* amount of "copies" to trail behind  */
+	float      renderTrailLag; /* how many scales each copy is behind */
+	uint8_t    renderTrailAlphaFalloff; /* alpha decrement */
+	float      renderTrailScaleFalloff; /* size  decrement */
 
 } vfProjectileBehavior;
 
@@ -398,10 +402,11 @@ VFAPI vfHandle vfCreateProjectileBehavior(vgShape shape, vgTexture texture,
 VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate);
 VFAPI vfProjectileBehavior  vfGetProjectileBehavior(vfHandle pbHandle);
 VFAPI vfProjectileBehavior* vfGetProjectileBehaviorPTR(vfHandle pbHandle);
-VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
+VFAPI vfHandle vfCreateProjectileV(vfEntity* source, vfHandle behavior,
 	vfVector direction);
-VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
+VFAPI vfHandle vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 	float direction);
+VFAPI vfProjectile* vfGetProjectile(vfHandle handle);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI void* vfGetBuffer(int type);
