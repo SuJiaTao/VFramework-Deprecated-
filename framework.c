@@ -1682,6 +1682,8 @@ static void updateProjectiles(void)
 		/* apply drag to projectile */
 		float dragVariation = seededRandomFLOAT(_projBuffer - proj,
 			pb.dragVariation);
+		proj->movement.x *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
+		proj->movement.y *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
 
 		/* increase projectile age */
 		proj->age++;
