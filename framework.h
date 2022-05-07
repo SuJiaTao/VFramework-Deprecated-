@@ -221,6 +221,7 @@ typedef struct vfProjectileBehavior
 	vfFlag nonEntityPenetration : 1; /* ability to penetrate non entities */
 	vfFlag infinitePenetration  : 1; /* unstoppable projectile            */
 	vfFlag useShrapnel : 1;          /* creates shrapnel upon collision   */
+	vfFlag invisible   : 1;          /* should projectile be rendered */
 
 	uint8_t penetrationPower;   /* bounds projectile can pass through */
  	float   penetrationChance;  /* percent of penetration             */
@@ -250,6 +251,8 @@ typedef struct vfProjectileBehavior
 
 	vfLifeTime maxAge; /* max time allowed to live */
 	vfLifeTime maxAgeVariation; /* max time variation */
+
+	vfLifeTime renderAgeStart; /* age to start rendering */
 
 } vfProjectileBehavior;
 

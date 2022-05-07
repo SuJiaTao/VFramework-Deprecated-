@@ -2771,6 +2771,9 @@ VFAPI void vfRenderProjectiles(void)
 		vfProjectile* proj = _projBuffer + i;
 		vfProjectileBehavior* pb = _projBBuffer + proj->behaviorHandle;
 
+		/* check if should be rendered */
+		if (proj->age < pb->renderAgeStart) continue;
+
 		vgUseTexture(pb->texture);
 		vgDrawShapeTextured(pb->shape, proj->position.x,
 			proj->position.y, 0, pb->shapeScale);
