@@ -1634,6 +1634,10 @@ static void updateProjectiles(void)
 				/* increment penetration counter */
 				proj->penetrations++;
 
+				/* call collision callback */
+				if (pb.collisionCallback)
+					pb.collisionCallback(*proj, checkBound->entity);
+
 				/* if there's an entity attatched to the bound, set */
 				/* entity to new last collided */
 				if (checkBound->entity)
@@ -1641,10 +1645,20 @@ static void updateProjectiles(void)
 			}
 		}
 
-		/* check if projectile should be destroyed */
-		if (proj->penetrations >= pb.penetrationPower ||
-			proj->age > pb.maxAge + seededRandomFLOAT(i, pb.maxAgeVariation))
+		/* check if projectile should be destroyed due to penetration */
+		if (proj->penetrations >= pb.penetrationPower)
 		{
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
+		}
+
+		/* check if projectile should be destroyed due to age */
+		if (proj->age > pb.maxAge + seededRandomFLOAT(i, pb.maxAgeVariation))
+		{
+			/* do callback */
+			if (pb.maxAgeCallback)
+				pb.maxAgeCallback(*proj);
 			/* set flag and decrement count */
 			_projBufferField[i] = 0;
 			_projCount--;
