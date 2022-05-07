@@ -1618,12 +1618,13 @@ static void updateProjectiles(void)
 			if (checkBound->entity == proj->source) continue;
 
 			/* if already collided with entity, skip */
-			if (checkBound->entity == proj->lastPenetrated) continue;
+			if (checkBound->entity == proj->lastPenetrated &&
+				proj->penetrations != 0) continue;
 
 			/* on collide with new entity */
 			if (vfCheckPointOverlap(proj->position, checkBound,
 				pb.boundScale)) {
-				
+
 				/* calculate if can penetrate */
 				if ((pb.penetrationChance < 1.0f &&
 					fabsf(seededRandomNORMALIZED(i + j + _tickCount))
