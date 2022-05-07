@@ -1560,6 +1560,8 @@ static inline vfVector cartesianToPolar(vfVector src)
 static void updateProjectiles(void)
 {
 	int counter = 0;
+
+	/* for every projectile */
 	for (int i = 0; i < _projAllocated; i++)
 	{
 		if (counter >= _projBCount) break; /* on checked all, break */
@@ -1568,7 +1570,7 @@ static void updateProjectiles(void)
 
 		/* get projectile and behavior */
 		vfProjectile* proj = _projBuffer + i;
-		vfProjectileBehavior projBhv = _projBBuffer[proj->behaviorHandle];
+		vfProjectileBehavior pb = _projBBuffer[proj->behaviorHandle];
 
 		/* get projectile partition */
 		int partX; int partY;
@@ -1595,23 +1597,68 @@ static void updateProjectiles(void)
 			break;
 		}
 
-
 		/* for every bound in partition, check for collision */
 		for (int j = 0; colPart && j < colPart->bqCount; j++)
 		{
 			vfBound* checkBound = _bBuffer + colPart->bqIndexes[j];
+
+			/* if bound's entity is source, skip */
+			if (checkBound->entity == proj->source) continue;
+
+			/* if already collided with entity, skip */
+			if (checkBound->entity == proj->lastPenetrated) continue;
+
+			/* on collide with new entity */
 			if (vfCheckPointOverlap(proj->position, checkBound,
-				projBhv.boundScale)) {
-				if (checkBound->entity)
+				pb.boundScale)) {
+				
+				/* calculate if can penetrate */
+				if ((pb.penetrationChance < 1.0f &&
+					fabsf(seededRandomNORMALIZED(i + j + _tickCount))
+					> pb.penetrationChance)
+					|| pb.penetrationChance == 0.0f)
 				{
-					printf("%d: collided with entity: %d\n", _tickCount,
-						vfGetEntityHandle(checkBound->entity));
+					/* no more penetrations left, break */
+					proj->penetrations = pb.penetrationPower;
+					break;
 				}
+				
+				/* offset projectile direction vector */
+				float scatterX = seededRandomFLOAT(i + j + proj->penetrations, 
+					pb.penetrationScatter);
+				float scatterY = seededRandomFLOAT(i + j + proj->penetrations, 
+					pb.penetrationScatter);
+				proj->movement.x += scatterX;
+				proj->movement.y += scatterY;
+
+				/* increment penetration counter */
+				proj->penetrations++;
+
+				/* if there's an entity attatched to the bound, set */
+				/* entity to new last collided */
+				if (checkBound->entity)
+					proj->lastPenetrated = checkBound->entity;
 			}
+		}
+
+		/* check if projectile should be destroyed */
+		if (proj->penetrations >= pb.penetrationPower ||
+			proj->age > pb.maxAge + seededRandomFLOAT(i, pb.maxAgeVariation))
+		{
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
 		}
 
 		/* move projectile */
 		proj->position = vectorAdd(proj->position, proj->movement);
+
+		/* apply drag to projectile */
+		float dragVariation = seededRandomFLOAT(_projBuffer - proj,
+			pb.dragVariation);
+
+		/* increase projectile age */
+		proj->age++;
 	}
 }
 
@@ -2840,13 +2887,13 @@ VFAPI vfHandle vfCreateProjectileBehavior(vgShape shape, vgTexture texture,
 	pbh->texture = texture;
 	pbh->penetrationPower = penetrationPower;
 	pbh->speed = speed;
-	pbh->shapeScale = 1;
+	pbh->shapeScale = scale;
 	pbh->boundScale = scale;
 	pbh->maxAge = lifeTime;
 
 	/* increment count and return */
 	_projBCount++;
-	return pbh - _projBBuffer;
+	return _projBCount - 1;
 }
 
 VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate)
@@ -2863,7 +2910,7 @@ VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate)
 
 	/* increment count and return */
 	_projBCount++;
-	return pbh - _projBBuffer;
+	return _projBCount - 1;
 }
 
 VFAPI vfProjectileBehavior vfGetProjectileBehavior(vfHandle pbHandle)
@@ -2916,14 +2963,23 @@ VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 		proj->lastPenetrated = NULL;
 
 		proj->behaviorHandle = behavior;
-		proj->source = source;
+		proj->source   = source;
 		proj->position = source->transform->position;
 
 		/* randomize angle */
 		direction += seededRandomFLOAT(indexActual, pb.spread);
+
+		/* calculate speed */
 		float speed = pb.speed + seededRandomFLOAT(indexActual,
 			pb.speedVariation);
-		proj->movement = polarToCartestian(speed, direction);
+		proj->movement = polarToCartestian(speed, 
+			direction * 0.0174533);
+		proj->movement.x *= speed;
+		proj->movement.y *= speed;
+
+		/* accumulate speed */
+		proj->movement.x += source->physics.velocity.x;
+		proj->movement.y += source->physics.velocity.y;
 
 		/* increment projectile count */
 		_projCount++;

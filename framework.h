@@ -237,7 +237,6 @@ typedef struct vfProjectileBehavior
 
 	float shapeScale; /* shape scale */
 	float boundScale; /* bounding box scale */
-	float scaleVariation; /* shape and bound scale variation */
 
 	/* collision callback */
 	PROJTILECOLCALLBACK collisionCallback;
