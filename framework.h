@@ -104,6 +104,8 @@
 #define VF_PROJCOUNT_DEFAULT 0x400
 #define VF_PROJCOUNT_STEP    0x200
 #define VF_PROJCOUNT_CHANGETHRES 0x40
+#define VF_PROJ_MAXSTEP 10.0f
+#define VF_PROJ_MAXSTEPS 0x20
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)

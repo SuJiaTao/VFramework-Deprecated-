@@ -1584,7 +1584,119 @@ static inline vfVector cartesianToPolar(vfVector src)
 	return polar;
 }
 
-/* PROJECTILE UPDATE FUNCTION */
+/* PROJECTILE UPDATE FUNCTION AND HELPERS */
+
+/* get projectile partition. if none, returns NULL */
+static partition* getProjectilePartiton(vfProjectile* proj)
+{
+	/* get projectile partition */
+	int partX; int partY;
+	if (proj->position.x > 0)
+		partX = proj->position.x / (float)_partitionSize;
+	else
+		partX = floorf(proj->position.x / (float)_partitionSize);
+
+	if (proj->position.y > 0)
+		partY = proj->position.y / (float)_partitionSize;
+	else
+		partY = floorf(proj->position.y / (float)_partitionSize);
+
+	/* get partition (if exists) */
+	partition* colPart = NULL;
+	for (int j = 0; j < _partitionCount; j++)
+	{
+		/* if not found, continue */
+		if (_partBuff[j].x != partX ||
+			_partBuff[j].y != partY) continue;
+
+		/* on found, set and break */
+		colPart = _partBuff + j;
+		break;
+	}
+
+	/* return partition */
+	return colPart;
+}
+
+/* projectile collision is like "ray marching"           */
+/* the projectile will take maxsteps or LESS             */
+/* and each step it will check if it has collided with a */
+/* bound in it's current partition. if it collides, it   */
+/* will return early as collided bound. if step without  */
+/* any collisions, will return NULL                      */
+static vfBound* checkProjectileCollide(vfProjectile* proj)
+{
+	/* get projectile behavior object */
+	vfProjectileBehavior pb = _projBBuffer[proj->behaviorHandle];
+
+	/* calculate step count */
+	int stepCount = 1;
+	float stepX = proj->movement.x;
+	float stepY = proj->movement.y;
+	float moveMax = max(proj->movement.x, proj->movement.y);
+
+	/* get final position */
+	vfVector positionFinal = vectorAdd(proj->movement, proj->position);
+
+	/* only do subdivisions if movement is > MAXSTEP*/
+	if (moveMax > VF_PROJ_MAXSTEP)
+	{
+		stepCount = min(moveMax / VF_PROJ_MAXSTEP, VF_PROJ_MAXSTEPS);
+		
+		stepX /= (float)stepCount;
+		stepY /= (float)stepCount;
+	}
+
+	/* do steps */
+	for (int i = 0; i < stepCount; i++)
+	{
+		/* move projectile forward */
+		proj->position = vectorAdd(proj->position, VECT(stepX, stepY));
+
+		/* get projectile partition */
+		partition* projPart = getProjectilePartiton(proj);
+		if (!projPart) continue; /* on empty, continue */
+
+		/* loop all bounds within projPart */
+		for (int j = 0; j < projPart->bqCount; j++)
+		{
+			/* get bound */
+			vfBound* checkBound = _bBuffer + projPart->bqIndexes[j];
+
+			/* skip if inactive or physics is inactive */
+			if (!checkBound->active) continue;
+			if (checkBound->entity)
+				if (!checkBound->entity->active) continue;
+
+			/* if bound's entity is source, skip */
+			if (checkBound->entity == proj->source) continue;
+
+			/* if already collided with entity, skip */
+			if (checkBound->entity == proj->lastPenetrated &&
+				proj->penetrations != 0) continue;
+
+			/* on overlap, set collidedBound and break */
+			if (vfCheckPointOverlap(proj->position, checkBound,
+				pb.boundScale))
+			{
+				/* do callback */
+				if (pb.collisionCallback)
+					pb.collisionCallback(*proj, checkBound->entity);
+				/* set new final position */
+				proj->position = positionFinal;
+				return checkBound;
+			}
+		}
+	}
+
+	/* set new final position */
+	proj->position = positionFinal;
+
+	/* return collided bound */
+	return NULL;
+}
+
+/* main projectile update function */
 static void updateProjectiles(void)
 {
 	int counter = 0;
@@ -1600,141 +1712,110 @@ static void updateProjectiles(void)
 		vfProjectile* proj = _projBuffer + i;
 		vfProjectileBehavior pb = _projBBuffer[proj->behaviorHandle];
 
-		/* get projectile partition */
-		int partX; int partY;
-		if (proj->position.x > 0)
-			partX = proj->position.x / (float)_partitionSize;
-		else
-			partX = floorf(proj->position.x / (float)_partitionSize);
-
-		if (proj->position.y > 0)
-			partY = proj->position.y / (float)_partitionSize;
-		else
-			partY = floorf(proj->position.y / (float)_partitionSize);
-
-		/* get partition (if exists) */
-		partition* colPart = NULL;
-		for (int j = 0; j < _partitionCount; j++)
-		{
-			/* if not found, continue */
-			if (_partBuff[j].x != partX ||
-				_partBuff[j].y != partY) continue;
-
-			/* on found, set and break */
-			colPart = _partBuff + j;
-			break;
-		}
-
-		/* for every bound in partition, check for collision */
-		for (int j = 0; colPart && j < colPart->bqCount; j++)
-		{
-			vfBound* checkBound = _bBuffer + colPart->bqIndexes[j];
-
-			/* skip if inactive or physics is inactive */
-			if (!checkBound->active) continue;
-			if (checkBound->entity)
-				if (!checkBound->entity->active) continue;
-
-			/* if bound's entity is source, skip */
-			if (checkBound->entity == proj->source) continue;
-
-			/* if already collided with entity, skip */
-			if (checkBound->entity == proj->lastPenetrated &&
-				proj->penetrations != 0) continue;
-
-			/* on collide with new bound */
-			if (vfCheckPointOverlap(proj->position, checkBound,
-				pb.boundScale)) {
-
-				/* if there is no entity, and cannot penetrate */
-				/* non entities, destroy the projectile */
-				if (!checkBound->entity && !pb.nonEntityPenetration)
-				{
-					_projBufferField[i] = 0;
-					_projCount--;
-					break;
-				}
-
-				/* calculate if can penetrate */
-				if ((pb.penetrationChance < 1.0f &&
-					fabsf(seededRandomNORMALIZED(_tickCount))
-					> pb.penetrationChance)
-					|| pb.penetrationChance == 0.0f)
-				{
-					/* no more penetrations left, break */
-					proj->penetrations = pb.penetrationPower;
-					break;
-				}
-				
-				/* offset projectile direction vector */
-				float scatterX = seededRandomFLOAT(i + j + proj->penetrations, 
-					pb.penetrationScatter);
-				float scatterY = seededRandomFLOAT(i + j + proj->penetrations, 
-					pb.penetrationScatter);
-				proj->movement.x += scatterX;
-				proj->movement.y += scatterY;
-
-				/* increment penetration counter */
-				proj->penetrations++;
-
-				/* call collision callback */
-				if (pb.collisionCallback)
-					pb.collisionCallback(*proj, checkBound->entity);
-
-				/* if there's an entity attatched to the bound, set */
-				/* entity to new last collided */
-				if (checkBound->entity)
-					proj->lastPenetrated = checkBound->entity;
-
-				/* create shrapnel */
-				if (pb.useShrapnel)
-				{
-					/* calculate amount of shrapnel to create */
-					int sCount = max(0, pb.shrapnelCount -
-						proj->penetrations * pb.shrapnelFalloff);
-
-					for (int k = 0; k < sCount; k++)
-					{
-						/* no shrapnel condition */
-						if (fabsf(seededRandomNORMALIZED(_tickCount))
-							> pb.shrapnelChance
-							&& pb.shrapnelChance != 1.0f
-							|| pb.shrapnelChance == 0.0f) continue;
-
-						/* get rand offset*/
-						int scatterSeed = _tickCount + i + j + k;
-						float scatterR = seededRandomFLOAT(scatterSeed,
-							pb.shrapnelScatter);
-
-						/* get rotation */
-						float angle = atan2f(proj->movement.y,
-							proj->movement.x);
-						angle *= 57.2958f;
-
-						/* create new projectile */
-						vfCreateProjectileR(proj->lastPenetrated,
-							pb.shrapnelBehavior,
-							angle + scatterR);
-					} /* shrapnel loop end */
-				} /* shrapnel check */
-			} /* overlap check end */
-		} /* partition index check loop end */
-
-		/* check if projectile should be destroyed due to penetration */
-		if (proj->penetrations >= pb.penetrationPower &&
-			!pb.infinitePenetration)
-		{
-			/* set flag and decrement count */
-			_projBufferField[i] = 0;
-			_projCount--;
-		}
-
 		/* check if projectile should be destroyed due to age */
 		if (proj->age > pb.maxAge + seededRandomFLOAT(i, pb.maxAgeVariation))
 		{
 			/* do callback */
 			if (pb.maxAgeCallback)
 				pb.maxAgeCallback(*proj);
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
+		}
+
+		/* increase projectile age */
+		proj->age++;
+
+		/* get collided bound of projectile */
+		vfBound* collisionBound = checkProjectileCollide(proj);
+		if (!collisionBound) continue;
+
+		/*if there is no entity, and cannot penetrate* /
+		/* non entities, destroy the projectile */
+		if (!collisionBound->entity && !pb.nonEntityPenetration)
+		{
+			_projBufferField[i] = 0;
+			_projCount--;
+			continue;
+		}
+
+		/* calculate if can't penetrate */
+		if ((pb.penetrationChance < 1.0f &&
+			fabsf(seededRandomNORMALIZED(_tickCount))
+		> pb.penetrationChance)
+			|| pb.penetrationChance == 0.0f)
+		{
+			/* destroy projectile */
+			_projBufferField[i] = 0;
+			_projCount--;
+			continue;
+		}
+
+		/* increment penetration counter */
+		proj->penetrations++;
+		
+		/* offset projectile direction vector */
+		int scatterSeed = i + (collisionBound - _bBuffer)
+			+ proj->penetrations;
+		float scatterX = seededRandomFLOAT(scatterSeed + 0,
+			pb.penetrationScatter);
+		float scatterY = seededRandomFLOAT(scatterSeed + 1,
+			pb.penetrationScatter);
+		proj->movement.x += scatterX;
+		proj->movement.y += scatterY;
+
+		/* call collision callback */
+		if (pb.collisionCallback)
+			pb.collisionCallback(*proj, collisionBound->entity);
+
+		/* if there's an entity attatched to the bound, set */
+		/* entity to new last collided */
+		if (collisionBound->entity)
+			proj->lastPenetrated = collisionBound->entity;
+
+		/* create shrapnel */
+		if (pb.useShrapnel)
+		{
+			/* calculate amount of shrapnel to create */
+			int sCount = max(0, pb.shrapnelCount -
+				proj->penetrations * pb.shrapnelFalloff);
+
+			for (int k = 0; k < sCount; k++)
+			{
+				/* no shrapnel condition */
+				if (fabsf(seededRandomNORMALIZED(_tickCount))
+			> pb.shrapnelChance
+					&& pb.shrapnelChance != 1.0f
+					|| pb.shrapnelChance == 0.0f) continue;
+
+				/* get rand offset*/
+				int scatterSeed = _tickCount + i + 
+					(collisionBound - _bBuffer) + k;
+				float scatterR = seededRandomFLOAT(scatterSeed,
+					pb.shrapnelScatter);
+
+				/* get rotation */
+				float angle = atan2f(proj->movement.y,
+					proj->movement.x);
+				angle *= 57.2958f;
+
+				/* get source entity */
+				vfEntity* srcEnt = proj->lastPenetrated;
+
+				/* can't create shrapnel on non-entity collide */
+				if (!srcEnt) continue;
+
+				/* create new projectile */
+				vfCreateProjectileR(srcEnt,
+					pb.shrapnelBehavior,
+					angle + scatterR);
+			} /* shrapnel loop end */
+		} /* shrapnel check */
+
+		/* check if projectile should be destroyed due to penetration */
+		if (proj->penetrations >= pb.penetrationPower &&
+			!pb.infinitePenetration)
+		{
 			/* set flag and decrement count */
 			_projBufferField[i] = 0;
 			_projCount--;
@@ -1748,9 +1829,6 @@ static void updateProjectiles(void)
 			pb.dragVariation);
 		proj->movement.x *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
 		proj->movement.y *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
-
-		/* increase projectile age */
-		proj->age++;
 	}
 }
 
