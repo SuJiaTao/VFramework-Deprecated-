@@ -1579,7 +1579,7 @@ static inline float randomFLOAT(float clamp)
 static inline vfVector cartesianToPolar(vfVector src)
 {
 	vfVector polar;
-	polar.x = vectorMagnitude(src);
+	polar.x = hypotf(src.x, src.y);
 	polar.y = atan2f(src.y, src.x);
 	return polar;
 }
@@ -1633,16 +1633,17 @@ static vfBound* checkProjectileCollide(vfProjectile* proj)
 	int stepCount = 1;
 	float stepX = proj->movement.x;
 	float stepY = proj->movement.y;
-	float moveMax = max(proj->movement.x, proj->movement.y);
+	float moveMax = max(fabsf(proj->movement.x),
+		fabsf(proj->movement.y));
 
 	/* get final position */
 	vfVector positionFinal = vectorAdd(proj->movement, proj->position);
 
 	/* only do subdivisions if movement is > MAXSTEP*/
-	if (moveMax > VF_PROJ_MAXSTEP)
+	if (moveMax > VF_PROJ_PRECISION)
 	{
-		stepCount = min(moveMax / VF_PROJ_MAXSTEP, VF_PROJ_MAXSTEPS);
-		
+		stepCount = min(moveMax / VF_PROJ_PRECISION, VF_PROJ_MAXSTEPS);
+
 		stepX /= (float)stepCount;
 		stepY /= (float)stepCount;
 	}
@@ -3145,6 +3146,13 @@ VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 		/* calculate speed */
 		float speed = pb.speed + seededRandomFLOAT(indexActual,
 			pb.speedVariation);
+
+		/* for whatever reason, i HAVE to sqrt the speed    */
+		/* i think my polarToCartesian function might be    */
+		/* broken, but either way the same amount of cycles */
+		/* should be used. god i need to review trig        */
+		speed = sqrtf(speed); 
+
 		proj->movement = polarToCartestian(speed, 
 			direction * 0.0174533);
 		proj->movement.x *= speed;
