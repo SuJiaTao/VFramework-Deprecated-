@@ -1480,6 +1480,12 @@ static inline void ensureProjectileBufferSize(void)
 		memcpy(temp, _projBuffer, sizeof(vfProjectile) * oldSize);
 		vFree(_projBuffer);
 		_projBuffer = temp;
+
+		/* reallocate projectile buffer field */
+		temp = vAlloc(sizeof(field) * _projAllocated, TRUE);
+		memcpy(temp, _projBufferField, sizeof(field) * oldSize);
+		vFree(_projBufferField);
+		_projBufferField = temp;
 	}
 
 	/* check if projectile buffer must be decreased */
@@ -1494,6 +1500,12 @@ static inline void ensureProjectileBufferSize(void)
 		memcpy(temp, _projBuffer, sizeof(vfProjectile) * _projAllocated);
 		vFree(_projBuffer);
 		_projBuffer = temp;
+
+		/* reallocate projectile buffer field */
+		temp = vAlloc(sizeof(field) * _projAllocated, FALSE);
+		memcpy(temp, _projBufferField, sizeof(field) * _projAllocated);
+		vFree(_projBufferField);
+		_projBufferField = temp;
 	}
 }
 
