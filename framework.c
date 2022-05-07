@@ -1640,7 +1640,7 @@ static vfBound* checkProjectileCollide(vfProjectile* proj)
 	vfVector positionFinal = vectorAdd(proj->movement, proj->position);
 
 	/* only do subdivisions if movement is > MAXSTEP*/
-	if (moveMax > VF_PROJ_PRECISION)
+	if (moveMax > VF_PROJ_PRECISION * pb.boundScale)
 	{
 		stepCount = min(moveMax / VF_PROJ_PRECISION, VF_PROJ_MAXSTEPS);
 
