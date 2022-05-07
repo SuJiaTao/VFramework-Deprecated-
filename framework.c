@@ -2787,9 +2787,32 @@ VFAPI void vfRenderProjectiles(void)
 		if (pb->invisible) continue;
 		if (proj->age < pb->renderAgeStart) continue;
 
+		vgTextureFilterReset();
 		vgUseTexture(pb->texture);
 		vgDrawShapeTextured(pb->shape, proj->position.x,
 			proj->position.y, 0, pb->shapeScale);
+
+		/* check if should render trail*/
+		if (pb->renderTrail)
+		{
+			/* render in decreasing alpha order */
+			vfVector renderPos = proj->position;
+			for (int i = 0; i < pb->renderTrail; i++)
+			{
+				/* set filter */
+				vgTextureFilter(255, 255, 255,
+					255 - ((255 / pb->renderTrail) * i));
+
+				/* decrement draw position */
+				renderPos.x -= proj->movement.x / pb->shapeScale;
+				renderPos.y -= proj->movement.y / pb->shapeScale;
+
+				/* render trail */
+				vgDrawShapeTextured(pb->shape, renderPos.x,
+					renderPos.y, 0, pb->shapeScale);
+			}
+		}
+		
 	}
 
 	/* release write mutex */

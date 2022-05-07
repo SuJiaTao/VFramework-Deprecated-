@@ -255,11 +255,11 @@ typedef struct vfProjectileBehavior
 	/* stop callback */
 	PROJTILESTOPMOVECALLBACK stopMoveCallback;
 	
-
 	vfLifeTime maxAge; /* max time allowed to live */
 	vfLifeTime maxAgeVariation; /* max time variation */
 
 	vfLifeTime renderAgeStart; /* age to start rendering */
+	uint8_t    renderTrail;    /* amount of "copies" to trail behind */
 
 } vfProjectileBehavior;
 
