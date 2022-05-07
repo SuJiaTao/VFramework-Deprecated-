@@ -897,11 +897,11 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		/* if source has no entity, ratio is 100% */
 		if (source->staticData.entity == NULL)
 		{
-			/* instant displacement */
+			/* instant jalf displacement */
 			target->staticData.entity->transform->position.x
-				-= smallestPVect.x;
+				-= smallestPVect.x / 2.0f;
 			target->staticData.entity->transform->position.y
-				-= smallestPVect.y;
+				-= smallestPVect.y / 2.0f;
 
 			/* set ratio to 1 */
 			massPercent = 1.0f;
@@ -1471,6 +1471,11 @@ static inline void ensureProjectileBufferSize(void)
 	/* check if projectile buffer must be increased */
 	if (_projCount > _projAllocated - VF_PROJCOUNT_CHANGETHRES)
 	{
+		/* get write mutex */
+		int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+		if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+			"Projectile Creation");
+
 		/* increment projbuffer size */
 		int oldSize = _projAllocated;
 		_projAllocated += VF_PROJCOUNT_STEP;
@@ -1486,12 +1491,20 @@ static inline void ensureProjectileBufferSize(void)
 		memcpy(temp, _projBufferField, sizeof(field) * oldSize);
 		vFree(_projBufferField);
 		_projBufferField = temp;
+
+		/* release write mutex */
+		ReleaseMutex(_writeMutex);
 	}
 
 	/* check if projectile buffer must be decreased */
 	if (_projCount < _projAllocated - VF_PROJCOUNT_CHANGETHRES
 		- VF_PROJCOUNT_STEP && _projCount >= VF_PROJCOUNT_DEFAULT)
 	{
+		/* get write mutex */
+		int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+		if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+			"Projectile Creation");
+
 		/* decrement projbuffer size */
 		_projAllocated -= VF_PROJCOUNT_STEP;
 
@@ -1506,6 +1519,9 @@ static inline void ensureProjectileBufferSize(void)
 		memcpy(temp, _projBufferField, sizeof(field) * _projAllocated);
 		vFree(_projBufferField);
 		_projBufferField = temp;
+
+		/* release write mutex */
+		ReleaseMutex(_writeMutex);
 	}
 }
 
@@ -1614,6 +1630,11 @@ static void updateProjectiles(void)
 		{
 			vfBound* checkBound = _bBuffer + colPart->bqIndexes[j];
 
+			/* skip if inactive or physics is inactive */
+			if (!checkBound->active) continue;
+			if (checkBound->entity)
+				if (!checkBound->entity->active) continue;
+
 			/* if bound's entity is source, skip */
 			if (checkBound->entity == proj->source) continue;
 
@@ -1621,13 +1642,22 @@ static void updateProjectiles(void)
 			if (checkBound->entity == proj->lastPenetrated &&
 				proj->penetrations != 0) continue;
 
-			/* on collide with new entity */
+			/* on collide with new bound */
 			if (vfCheckPointOverlap(proj->position, checkBound,
 				pb.boundScale)) {
 
+				/* if there is no entity, and cannot penetrate */
+				/* non entities, destroy the projectile */
+				if (!checkBound->entity && !pb.nonEntityPenetration)
+				{
+					_projBufferField[i] = 0;
+					_projCount--;
+					break;
+				}
+
 				/* calculate if can penetrate */
 				if ((pb.penetrationChance < 1.0f &&
-					fabsf(seededRandomNORMALIZED(i + j + _tickCount))
+					fabsf(seededRandomNORMALIZED(_tickCount))
 					> pb.penetrationChance)
 					|| pb.penetrationChance == 0.0f)
 				{
@@ -1655,11 +1685,44 @@ static void updateProjectiles(void)
 				/* entity to new last collided */
 				if (checkBound->entity)
 					proj->lastPenetrated = checkBound->entity;
-			}
-		}
+
+				/* create shrapnel */
+				if (pb.useShrapnel)
+				{
+					/* calculate amount of shrapnel to create */
+					int sCount = max(0, pb.shrapnelCount -
+						proj->penetrations * pb.shrapnelFalloff);
+
+					for (int k = 0; k < sCount; k++)
+					{
+						/* no shrapnel condition */
+						if (fabsf(seededRandomNORMALIZED(_tickCount))
+							> pb.shrapnelChance
+							&& pb.shrapnelChance != 1.0f
+							|| pb.shrapnelChance == 0.0f) continue;
+
+						/* get rand offset*/
+						int scatterSeed = _tickCount + i + j + k;
+						float scatterR = seededRandomFLOAT(scatterSeed,
+							pb.shrapnelScatter);
+
+						/* get rotation */
+						float angle = atan2f(proj->movement.y,
+							proj->movement.x);
+						angle *= 57.2958f;
+
+						/* create new projectile */
+						vfCreateProjectileR(proj->lastPenetrated,
+							pb.shrapnelBehavior,
+							angle + scatterR);
+					} /* shrapnel loop end */
+				} /* shrapnel check */
+			} /* overlap check end */
+		} /* partition index check loop end */
 
 		/* check if projectile should be destroyed due to penetration */
-		if (proj->penetrations >= pb.penetrationPower)
+		if (proj->penetrations >= pb.penetrationPower &&
+			!pb.infinitePenetration)
 		{
 			/* set flag and decrement count */
 			_projBufferField[i] = 0;
@@ -2615,6 +2678,11 @@ VFAPI void vfRenderProjectiles(void)
 {
 	if (vgGetRenderSkipState()) return;
 
+	/* get write mutex */
+	int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0)
+		showMutexError("Write Mutex", "Could not draw projectiles!");
+
 	vgRenderLayer(0);
 	for (int i = 0; i < _projAllocated; i++)
 	{
@@ -2628,6 +2696,9 @@ VFAPI void vfRenderProjectiles(void)
 		vgDrawShapeTextured(pb->shape, proj->position.x,
 			proj->position.y, 0, pb->shapeScale);
 	}
+
+	/* release write mutex */
+	ReleaseMutex(_writeMutex);
 }
 
 /* PHYSICS RELATED FUNCTIONS */
@@ -2956,17 +3027,12 @@ VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
 	vfVector direction)
 {
 	vfVector polar = cartesianToPolar(direction);
-	vfCreateProjectileR(source, behavior, polar.y);
+	vfCreateProjectileR(source, behavior, polar.y * 57.2958f);
 }
 
 VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 	float direction)
 {
-	/* get write mutex */
-	int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
-	if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
-		"Projectile Creation");
-
 	/* make sure projectile buffer is big enough */
 	ensureProjectileBufferSize();
 
@@ -3015,9 +3081,6 @@ VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 
 		break;
 	}
-
-	/* release write mutex */
-	ReleaseMutex(_writeMutex);
 }
 
 

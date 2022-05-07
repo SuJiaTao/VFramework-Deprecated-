@@ -224,6 +224,7 @@ typedef struct vfProjectileBehavior
 
 	vfHandle shrapnelBehavior; /* shrapnel behavior        */
 	float    shrapnelChance;   /* shrapnel chance 0f - 1f  */
+	float    shrapnelScatter;  /* shrapnel rotation offset */
 	uint8_t  shrapnelCount;    /* shrapnel per penetration */
 	uint8_t  shrapnelFalloff;  /* shrapnel decrease per penetration */
 
