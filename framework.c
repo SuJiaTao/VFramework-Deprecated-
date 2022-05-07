@@ -3125,8 +3125,8 @@ VFAPI void vfCreateProjectileV(vfEntity* source, vfHandle behavior,
 	vfCreateProjectileR(source, behavior, polar.y * 57.2958f);
 }
 
-VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
-	float direction)
+static void createProjectileSingle(vfEntity* source,
+	vfProjectileBehavior pb, vfHandle pbh,  float angle)
 {
 	/* make sure projectile buffer is big enough */
 	ensureProjectileBufferSize();
@@ -3144,20 +3144,17 @@ VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 		_projBufferField[indexActual] = 1; /* mark used */
 		vfProjectile* proj = _projBuffer + indexActual; /* get proj ptr */
 
-		/* get behavior */
-		vfProjectileBehavior pb = _projBBuffer[behavior];
-
 		/* set values */
 		proj->age = 0;
 		proj->penetrations = 0;
 		proj->lastPenetrated = NULL;
 
-		proj->behaviorHandle = behavior;
-		proj->source   = source;
+		proj->behaviorHandle = pbh;
+		proj->source = source;
 		proj->position = source->transform->position;
 
 		/* randomize angle */
-		direction += seededRandomFLOAT(indexActual, pb.spread);
+		angle += seededRandomFLOAT(indexActual, pb.spread);
 
 		/* calculate speed */
 		float speed = pb.speed + seededRandomFLOAT(indexActual,
@@ -3167,10 +3164,10 @@ VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 		/* i think my polarToCartesian function might be    */
 		/* broken, but either way the same amount of cycles */
 		/* should be used. god i need to review trig        */
-		speed = sqrtf(speed); 
+		speed = sqrtf(speed);
 
-		proj->movement = polarToCartestian(speed, 
-			direction * 0.0174533);
+		proj->movement = polarToCartestian(speed,
+			angle * 0.0174533);
 		proj->movement.x *= speed;
 		proj->movement.y *= speed;
 
@@ -3182,6 +3179,16 @@ VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 		_projCount++;
 
 		break;
+	}
+}
+
+VFAPI void vfCreateProjectileR(vfEntity* source, vfHandle behavior,
+	float direction)
+{
+	vfProjectileBehavior pb = _projBBuffer[behavior];
+	for (int i = 0; i < pb.pelletCount; i++)
+	{
+		createProjectileSingle(source, pb, behavior, direction);
 	}
 }
 
