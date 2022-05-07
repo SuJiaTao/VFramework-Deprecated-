@@ -86,12 +86,14 @@
 #define VF_OBJ_BOUND 0x20
 #define VF_OBJ_PARTICLE 0x30
 #define VF_OBJ_ENTITY 0x40
+#define VF_OBJ_PROJECTILE 0x80
 
-#define VF_BUFF_TRANSFORM 0x1
-#define VF_BUFF_BOUND     0x2
-#define VF_BUFF_PARTICLE  0x3
-#define VF_BUFF_ENTITY    0x4
-#define VF_BUFF_PARTITION 0x5
+#define VF_BUFF_TRANSFORM  0x1
+#define VF_BUFF_BOUND      0x2
+#define VF_BUFF_PARTICLE   0x3
+#define VF_BUFF_ENTITY     0x4
+#define VF_BUFF_PARTITION  0x5
+#define VF_BUFF_PROJECTILE 0x6
 
 #define VF_STATICCALLBACK_MAX 0x20
 

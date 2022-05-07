@@ -3118,6 +3118,9 @@ VFAPI void* vfGetBuffer(int type)
 
 	case VF_BUFF_PARTITION:
 		return _partBuff;
+
+	case VF_BUFF_PROJECTILE:
+		return _projBuffer;
 	
 	/* fail condition */
 	default:
@@ -3141,6 +3144,9 @@ VFAPI void* vfGetBufferField(int type)
 
 	case VF_BUFF_ENTITY:
 		return _eBufferField;
+
+	case VF_BUFF_PROJECTILE:
+		return _projBufferField;
 
 	default:
 		return NULL;
@@ -3167,6 +3173,10 @@ VFAPI int vfGetObjectCount(int type)
 
 	case VF_OBJ_ENTITY:
 		count = _eCount;
+		break;
+
+	case VF_OBJ_PROJECTILE:
+		count = _projCount;
 		break;
 
 	default:
