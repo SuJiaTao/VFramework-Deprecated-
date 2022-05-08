@@ -1600,6 +1600,14 @@ static inline vfVector cartesianToPolar(vfVector src)
 	return polar;
 }
 
+static inline vfVector polarToCartesian(float r, float theta)
+{
+	vfVector cart;
+	cart.x = r * cosf(theta);
+	cart.y = r * sinf(theta);
+	return cart;
+}
+
 /* PROJECTILE UPDATE FUNCTION AND HELPERS */
 
 /* get projectile partition. if none, returns NULL */
@@ -1792,15 +1800,23 @@ static void updateProjectiles(void)
 		/* increment penetration counter */
 		proj->penetrations++;
 		
-		/* offset projectile direction vector */
+		/* offset projectile scatter angle */
 		int scatterSeed = i + (collisionBound - _bBuffer)
 			+ proj->penetrations;
-		float scatterX = seededRandomFLOAT(scatterSeed + 0,
+		float scatterAngle = seededRandomFLOAT(scatterSeed,
 			pb.penetrationScatter);
-		float scatterY = seededRandomFLOAT(scatterSeed + 1,
-			pb.penetrationScatter);
-		proj->movement.x += scatterX;
-		proj->movement.y += scatterY;
+
+		/* get polar coordiantes of movement vector and add */
+		vfVector polarMoveVector = cartesianToPolar(proj->movement);
+		polarMoveVector.y += (scatterAngle * 0.0174533f);
+		
+		/* slow down movement vector */
+		float moveMagnitudeUpdated =
+			polarMoveVector.x * (1.0f - pb.penetrationSlowdown);
+
+		/* assign new movement vector */
+		proj->movement = polarToCartesian(moveMagnitudeUpdated,
+			polarMoveVector.y);
 
 		/* call collision callback */
 		if (pb.collisionCallback)
@@ -1859,14 +1875,6 @@ static void updateProjectiles(void)
 			_projCount--;
 		}
 	}
-}
-
-static inline vfVector polarToCartestian(float r, float theta)
-{
-	vfVector cart;
-	cart.x = r * cosf(theta);
-	cart.y = r * sinf(theta);
-	return cart;
 }
 
 /* ============ MODULE MAIN FUNCTION ============ */
@@ -3241,16 +3249,8 @@ static vfHandle createProjectileSingle(vfEntity* source,
 		float speed = pb.speed + seededRandomFLOAT(indexActual,
 			pb.speedVariation);
 
-		/* for whatever reason, i HAVE to sqrt the speed    */
-		/* i think my polarToCartesian function might be    */
-		/* broken, but either way the same amount of cycles */
-		/* should be used. god i need to review trig        */
-		speed = sqrtf(speed);
-
-		proj->movement = polarToCartestian(speed,
+		proj->movement = polarToCartesian(speed,
 			angle * 0.0174533);
-		proj->movement.x *= speed;
-		proj->movement.y *= speed;
 
 		/* accumulate speed */
 		proj->movement.x += source->physics.velocity.x;
