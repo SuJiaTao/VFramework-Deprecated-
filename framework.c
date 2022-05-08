@@ -1827,6 +1827,24 @@ static void updateProjectiles(void)
 		if (collisionBound->entity)
 			proj->lastPenetrated = collisionBound->entity;
 
+		/* check for ricochet chance */
+		if (fabsf(seededRandomNORMALIZED(_tickCount)) <
+			pb.ricochetChance)
+		{
+			/* flip x and y movement */
+			proj->movement.x *= -1;
+			proj->movement.y *= -1;
+
+			/* convert to polar coordiantes and scatter */
+			vfVector ricoPolar = cartesianToPolar(proj->movement);
+			ricoPolar.y += seededRandomFLOAT(i + _tickCount,
+				pb.ricochetScatter) * 0.0174533f;
+
+			/* convert back to cartesian */
+			proj->movement = polarToCartesian(ricoPolar.x,
+				ricoPolar.y);
+		}
+
 		/* create shrapnel */
 		if (pb.useShrapnel)
 		{

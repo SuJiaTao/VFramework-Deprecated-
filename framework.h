@@ -231,6 +231,9 @@ typedef struct vfProjectileBehavior
 	float   penetrationScatter;  /* direction change per penetration        */
 	float   penetrationSlowdown; /* slowdown scale 1.0f = stop, 0.5f = half */
 
+	float ricochetChance;   /* chance of doing a 180 upon penetration  */
+	float ricochetScatter;  /* variation on the ricochet angle         */
+
 	vfHandle shrapnelBehavior; /* shrapnel behavior        */
 	float    shrapnelChance;   /* shrapnel chance 0f - 1f  */
 	float    shrapnelScatter;  /* shrapnel rotation offset */
