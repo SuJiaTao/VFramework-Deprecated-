@@ -3302,6 +3302,24 @@ VFAPI vfProjectile* vfGetProjectile(vfHandle handle)
 	return _projBuffer + handle;
 }
 
+VFAPI void vfDestroyProjectile(vfProjectile* projectile)
+{
+	/* get buffer mutex */
+	int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+		"Could not destroy projectile");
+
+	/* clear flags and decrement count */
+	int index = _projBuffer - projectile;
+	_projBufferField[index] = 0;
+	_projCount--;
+
+	/* release buffer mutex */
+	ReleaseMutex(_writeMutex);
+
+	int index = 
+}
+
 
 /* ========= DATA RELATED FUNCTIONS ========== */
 

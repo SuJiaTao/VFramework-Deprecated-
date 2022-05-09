@@ -412,6 +412,7 @@ VFAPI vfHandle vfCreateProjectileV(vfEntity* source, vfHandle behavior,
 VFAPI vfHandle vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 	float direction);
 VFAPI vfProjectile* vfGetProjectile(vfHandle handle);
+VFAPI void vfDestroyProjectile(vfProjectile* projectile);
 
 /* DATA RELATED FUNCTIONS */
 VFAPI void* vfGetBuffer(int type);
