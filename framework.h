@@ -215,6 +215,7 @@ typedef struct vfParticle
 
 typedef struct vfProjectileBehavior
 {
+	vfLayer   layer;   /* projectile layer   */
 	vgShape   shape;   /* projectile shape   */
 	vgTexture texture; /* projectile texture */
 

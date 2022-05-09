@@ -2877,7 +2877,6 @@ VFAPI void vfRenderProjectiles(void)
 	if (result != WAIT_OBJECT_0)
 		showMutexError("Write Mutex", "Could not draw projectiles!");
 
-	vgRenderLayer(0);
 	/* FIRST, RENDER ALL PROJECTILES */
 	for (int i = 0; i < _projAllocated; i++)
 	{
@@ -2891,6 +2890,7 @@ VFAPI void vfRenderProjectiles(void)
 		if (pb->invisible) continue;
 		if (proj->age < pb->renderAgeStart) continue;
 
+		vgRenderLayer(pb->layer);
 		vgTextureFilterReset();
 		vgUseTexture(pb->texture);
 		vgDrawShapeTextured(pb->shape, proj->position.x,
@@ -3316,8 +3316,6 @@ VFAPI void vfDestroyProjectile(vfProjectile* projectile)
 
 	/* release buffer mutex */
 	ReleaseMutex(_writeMutex);
-
-	int index = 
 }
 
 
