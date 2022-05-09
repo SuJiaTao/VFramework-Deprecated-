@@ -12,6 +12,7 @@
 *		- Internal physics functions
 *		- Internal particle functions
 *		- Internal attribute functions
+*		- Internal projectile functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
@@ -20,6 +21,7 @@
 *		- Physics functions
 *		- Particle functions
 *		- Attribute functions
+*		- Projectile functions
 *		- Data functions
 *
 ******************************************************************************/
@@ -90,6 +92,13 @@ static vfTickCount _tickCount = 0;
 /* ATTRIBUTE TABLE DATA */
 static vfAttributeTable _atBuffer[VF_ATTRIBTABLES_MAX];
 static int _atCount;
+
+/* PROJECTILE DATA */
+static vfProjectileBehavior _projBBuffer[VF_PROJBEHAVIORS_MAX];
+static int _projBCount;
+static vfProjectile* _projBuffer; static field* _projBufferField;
+static int _projAllocated;
+static int _projCount;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -888,11 +897,11 @@ static inline int collisionCheck(boundQuad* source, boundQuad* target)
 		/* if source has no entity, ratio is 100% */
 		if (source->staticData.entity == NULL)
 		{
-			/* instant displacement */
+			/* instant jalf displacement */
 			target->staticData.entity->transform->position.x
-				-= smallestPVect.x;
+				-= smallestPVect.x / 2.0f;
 			target->staticData.entity->transform->position.y
-				-= smallestPVect.y;
+				-= smallestPVect.y / 2.0f;
 
 			/* set ratio to 1 */
 			massPercent = 1.0f;
@@ -1455,7 +1464,441 @@ static void* getAttributeInternal(vfEntity* target, const char* attribName)
 	return NULL;
 }
 
-/* ===== MODULE MAIN FUNCTION ===== */
+/* ========== INTERNAL PROJECTILE FUNCTIONS ========== */
+
+static inline void ensureProjectileBufferSize(void)
+{
+	/* check if projectile buffer must be increased */
+	if (_projCount > _projAllocated - VF_PROJCOUNT_CHANGETHRES)
+	{
+		/* get write mutex */
+		int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+		if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+			"Projectile Creation");
+
+		/* increment projbuffer size */
+		int oldSize = _projAllocated;
+		_projAllocated += VF_PROJCOUNT_STEP;
+
+		/* reallocate projectile buffer */
+		void* temp = vAlloc(sizeof(vfProjectile) * _projAllocated, FALSE);
+		memcpy(temp, _projBuffer, sizeof(vfProjectile) * oldSize);
+		vFree(_projBuffer);
+		_projBuffer = temp;
+
+		/* reallocate projectile buffer field */
+		temp = vAlloc(sizeof(field) * _projAllocated, TRUE);
+		memcpy(temp, _projBufferField, sizeof(field) * oldSize);
+		vFree(_projBufferField);
+		_projBufferField = temp;
+
+		/* release write mutex */
+		ReleaseMutex(_writeMutex);
+	}
+
+	/* check if projectile buffer must be decreased */
+	if (_projCount < _projAllocated - VF_PROJCOUNT_CHANGETHRES
+		- VF_PROJCOUNT_STEP && _projCount >= VF_PROJCOUNT_DEFAULT)
+	{
+		/* get write mutex */
+		int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+		if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+			"Projectile Creation");
+
+		/* decrement projbuffer size */
+		_projAllocated -= VF_PROJCOUNT_STEP;
+
+		/* reallocate projectile buffer */
+		void* temp = vAlloc(sizeof(vfProjectile) * _projAllocated, FALSE);
+		memcpy(temp, _projBuffer, sizeof(vfProjectile) * _projAllocated);
+		vFree(_projBuffer);
+		_projBuffer = temp;
+
+		/* reallocate projectile buffer field */
+		temp = vAlloc(sizeof(field) * _projAllocated, FALSE);
+		memcpy(temp, _projBufferField, sizeof(field) * _projAllocated);
+		vFree(_projBufferField);
+		_projBufferField = temp;
+
+		/* release write mutex */
+		ReleaseMutex(_writeMutex);
+	}
+}
+
+static int __randTable[] = /* random table */
+{
+	48, 00, 22, 31, 63, 57, 49, 91,
+	25, 89, 19, 49, 75, 68, 24, 86,
+	53, 84, 41, 23, 76, 35, 89, 60,
+	86, 73, 98, 48, 82, 28, 57, 30,
+	68, 48, 78, 21, 81, 83, 56, 78,
+	27, 67,  9, 27, 43, 60, 84, 80,
+	33, 43, 88, 61, 61, 52, 40, 54,
+	70, 93, 91, 27, 99, 96, 44, 86,
+	55, 82, 25, 05, 68, 57, 36, 24,
+	37, 85, 68, 44, 64, 93,  8, 36,
+	51, 90, 04, 48, 84,  9, 44, 95,
+	96, 18, 68, 11, 99, 80,  8, 21,
+	06, 48, 86, 67, 89, 38, 31, 41,
+	13, 24, 35, 43, 59, 64, 21, 03,
+	16, 74, 54, 95, 26, 43, 58, 02,
+	04, 89, 15, 48, 34, 40,  9, 97,
+	60, 57, 34, 41, 35, 76, 59, 03,
+	34, 93, 90, 31, 82, 56, 66, 33,
+	17, 06, 72, 03, 73, 80, 71, 18,
+	46, 39, 95, 55, 74, 71, 32, 89,
+	43, 26, 30, 17, 26, 67, 79, 51,
+	18, 94, 96, 46, 71, 32, 25, 74,
+	47, 02, 96, 13, 11, 65,  9, 14,
+	48, 14, 07, 79, 51, 48, 03, 73,
+	93, 88, 49, 16, 27, 11, 77, 17,
+	27, 07, 90, 45, 56, 78, 99, 05,
+	54, 01, 79, 39, 39, 15, 35, 11,
+	02, 34, 57, 25, 23, 83, 67, 72,
+	76, 23, 91, 19, 75, 73, 17, 69,
+	05, 84, 17, 13, 35,  8, 79, 50,
+	46, 85, 87, 54, 21, 73, 81, 87,
+	48, 00, 01, 01, 21, 68, 73, 02
+};
+
+static inline int seededRandomUINT(int seed)
+{
+	return __randTable[seed % (sizeof(__randTable) /
+		sizeof(__randTable[0]))];
+}
+
+static inline int seededRandomINT(int seed)
+{
+	int randVal = seededRandomUINT(seed);
+	randVal -= 50;
+	randVal *= 2;
+	return randVal;
+}
+
+static inline float seededRandomNORMALIZED(int seed)
+{
+	float percent = (float)seededRandomINT(seed);
+	return percent /= 100.0f;
+}
+
+static inline float seededRandomFLOAT(int seed, float clamp)
+{
+	return seededRandomNORMALIZED(seed) * clamp;
+}
+
+static int __randSeed = 0;
+static inline float randomFLOAT(float clamp)
+{
+	return seededRandomFLOAT(__randSeed++, clamp);
+}
+
+static inline vfVector cartesianToPolar(vfVector src)
+{
+	vfVector polar;
+	polar.x = hypotf(src.x, src.y);
+	polar.y = atan2f(src.y, src.x);
+	return polar;
+}
+
+static inline vfVector polarToCartesian(float r, float theta)
+{
+	vfVector cart;
+	cart.x = r * cosf(theta);
+	cart.y = r * sinf(theta);
+	return cart;
+}
+
+/* PROJECTILE UPDATE FUNCTION AND HELPERS */
+
+/* get projectile partition. if none, returns NULL */
+static partition* getProjectilePartiton(vfProjectile* proj)
+{
+	/* get projectile partition */
+	int partX; int partY;
+	if (proj->position.x > 0)
+		partX = proj->position.x / (float)_partitionSize;
+	else
+		partX = floorf(proj->position.x / (float)_partitionSize);
+
+	if (proj->position.y > 0)
+		partY = proj->position.y / (float)_partitionSize;
+	else
+		partY = floorf(proj->position.y / (float)_partitionSize);
+
+	/* get partition (if exists) */
+	partition* colPart = NULL;
+	for (int j = 0; j < _partitionCount; j++)
+	{
+		/* if not found, continue */
+		if (_partBuff[j].x != partX ||
+			_partBuff[j].y != partY) continue;
+
+		/* on found, set and break */
+		colPart = _partBuff + j;
+		break;
+	}
+
+	/* return partition */
+	return colPart;
+}
+
+/* projectile collision is like "ray marching"           */
+/* the projectile will take maxsteps or LESS             */
+/* and each step it will check if it has collided with a */
+/* bound in it's current partition. if it collides, it   */
+/* will return early as collided bound. if step without  */
+/* any collisions, will return NULL                      */
+static vfBound* checkProjectileCollide(vfProjectile* proj)
+{
+	/* get projectile behavior object */
+	vfProjectileBehavior pb = _projBBuffer[proj->behaviorHandle];
+
+	/* calculate step count */
+	int stepCount = 1;
+	float stepX = proj->movement.x;
+	float stepY = proj->movement.y;
+	float moveMax = max(fabsf(proj->movement.x),
+		fabsf(proj->movement.y));
+
+	/* get final position */
+	vfVector positionFinal = vectorAdd(proj->movement, proj->position);
+
+	/* only do subdivisions if movement is > MAXSTEP*/
+	if (moveMax > VF_PROJ_PRECISION * pb.boundScale)
+	{
+		stepCount = min(moveMax / VF_PROJ_PRECISION, VF_PROJ_MAXSTEPS);
+
+		stepX /= (float)stepCount;
+		stepY /= (float)stepCount;
+	}
+
+	/* do steps */
+	for (int i = 0; i < stepCount; i++)
+	{
+		/* move projectile forward */
+		proj->position = vectorAdd(proj->position, VECT(stepX, stepY));
+
+		/* get projectile partition */
+		partition* projPart = getProjectilePartiton(proj);
+		if (!projPart) continue; /* on empty, continue */
+
+		/* loop all bounds within projPart */
+		for (int j = 0; j < projPart->bqCount; j++)
+		{
+			/* get bound */
+			vfBound* checkBound = _bBuffer + projPart->bqIndexes[j];
+
+			/* skip if inactive or physics is inactive */
+			if (!checkBound->active) continue;
+			if (checkBound->entity)
+				if (!checkBound->entity->active) continue;
+
+			/* if bound's entity is source, skip */
+			if (checkBound->entity == proj->source) continue;
+
+			/* if already collided with entity, skip */
+			if (checkBound->entity == proj->lastPenetrated &&
+				proj->penetrations != 0) continue;
+
+			/* on overlap, set collidedBound and break */
+			if (vfCheckPointOverlap(proj->position, checkBound,
+				pb.boundScale))
+			{
+				/* do callback */
+				if (pb.collisionCallback)
+					pb.collisionCallback(proj, checkBound->entity);
+				/* set new final position */
+				proj->position = positionFinal;
+				return checkBound;
+			}
+		}
+	}
+
+	/* set new final position */
+	proj->position = positionFinal;
+
+	/* return collided bound */
+	return NULL;
+}
+
+/* main projectile update function */
+static void updateProjectiles(void)
+{
+	int counter = 0;
+
+	/* for every projectile */
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		if (counter >= _projBCount) break; /* on checked all, break */
+
+		if (!_projBufferField[i]) continue; /* on empty, continue */
+
+		/* get projectile and behavior */
+		vfProjectile* proj = _projBuffer + i;
+		vfProjectileBehavior pb = _projBBuffer[proj->behaviorHandle];
+
+		/* check if projectile should be destroyed due to age */
+		if (proj->age > pb.maxAge + seededRandomFLOAT(i, pb.maxAgeVariation))
+		{
+			/* do callback */
+			if (pb.maxAgeCallback)
+				pb.maxAgeCallback(proj);
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
+		}
+
+		/* increase projectile age */
+		proj->age++;
+
+		/* apply drag to projectile */
+		float dragVariation = seededRandomFLOAT(_projBuffer - proj,
+			pb.dragVariation);
+		proj->movement.x *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
+		proj->movement.y *= (1.0f - (1.0f * max(0.0f, pb.drag + dragVariation)));
+
+		/* if stopped moving, destroy */
+		if (pb.destroyOnStopMoving &&
+			floorf(fabsf(proj->movement.x)) <= pb.stopMoveThresh &&
+			floorf(fabsf(proj->movement.y)) <= pb.stopMoveThresh   )
+		{
+			/* try callback */
+			if (pb.stopMoveCallback)
+				pb.stopMoveCallback(proj);
+
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
+			continue;
+		}
+
+		/* get collided bound of projectile */
+		vfBound* collisionBound = checkProjectileCollide(proj);
+		if (!collisionBound) continue;
+
+		/*if there is no entity, and cannot penetrate* /
+		/* non entities, destroy the projectile */
+		if (!collisionBound->entity && !pb.nonEntityPenetration)
+		{
+			_projBufferField[i] = 0;
+			_projCount--;
+			continue;
+		}
+
+		/* calculate if can't penetrate */
+		if ((pb.penetrationChance < 1.0f &&
+			fabsf(seededRandomNORMALIZED(_tickCount))
+		> pb.penetrationChance)
+			|| pb.penetrationChance == 0.0f)
+		{
+			/* destroy projectile */
+			_projBufferField[i] = 0;
+			_projCount--;
+			continue;
+		}
+
+		/* increment penetration counter */
+		proj->penetrations++;
+		
+		/* offset projectile scatter angle */
+		int scatterSeed = i + (collisionBound - _bBuffer)
+			+ proj->penetrations;
+		float scatterAngle = seededRandomFLOAT(scatterSeed,
+			pb.penetrationScatter);
+
+		/* get polar coordiantes of movement vector and add */
+		vfVector polarMoveVector = cartesianToPolar(proj->movement);
+		polarMoveVector.y += (scatterAngle * 0.0174533f);
+		
+		/* slow down movement vector */
+		float moveMagnitudeUpdated =
+			polarMoveVector.x * (1.0f - pb.penetrationSlowdown);
+
+		/* assign new movement vector */
+		proj->movement = polarToCartesian(moveMagnitudeUpdated,
+			polarMoveVector.y);
+
+		/* call collision callback */
+		if (pb.collisionCallback)
+			pb.collisionCallback(proj, collisionBound->entity);
+
+		/* if there's an entity attatched to the bound, set */
+		/* entity to new last collided */
+		if (collisionBound->entity)
+			proj->lastPenetrated = collisionBound->entity;
+
+		/* check for ricochet chance */
+		if (fabsf(seededRandomNORMALIZED(_tickCount)) <
+			pb.ricochetChance)
+		{
+			/* flip x and y movement */
+			proj->movement.x *= -1;
+			proj->movement.y *= -1;
+
+			/* convert to polar coordiantes and scatter */
+			vfVector ricoPolar = cartesianToPolar(proj->movement);
+			ricoPolar.y += seededRandomFLOAT(i + _tickCount,
+				pb.ricochetScatter) * 0.0174533f;
+
+			/* slow down vector magnitude */
+			ricoPolar.x *= (1.0f - pb.ricochetSlowdown);
+
+			/* convert back to cartesian */
+			proj->movement = polarToCartesian(ricoPolar.x,
+				ricoPolar.y);
+		}
+
+		/* create shrapnel */
+		if (pb.useShrapnel)
+		{
+			/* calculate amount of shrapnel to create */
+			int sCount = max(0, pb.shrapnelCount -
+				proj->penetrations * pb.shrapnelFalloff);
+
+			for (int k = 0; k < sCount; k++)
+			{
+				/* no shrapnel condition */
+				if (fabsf(seededRandomNORMALIZED(_tickCount))
+			> pb.shrapnelChance
+					&& pb.shrapnelChance != 1.0f
+					|| pb.shrapnelChance == 0.0f) continue;
+
+				/* get rand offset*/
+				int scatterSeed = _tickCount + i + 
+					(collisionBound - _bBuffer) + k;
+				float scatterR = seededRandomFLOAT(scatterSeed,
+					pb.shrapnelScatter);
+
+				/* get rotation */
+				float angle = atan2f(proj->movement.y,
+					proj->movement.x);
+				angle *= 57.2958f;
+
+				/* get source entity */
+				vfEntity* srcEnt = proj->lastPenetrated;
+
+				/* can't create shrapnel on non-entity collide */
+				if (!srcEnt) continue;
+
+				/* create new projectile */
+				vfCreateProjectileR(srcEnt,
+					pb.shrapnelBehavior,
+					angle + scatterR);
+			} /* shrapnel loop end */
+		} /* shrapnel check */
+
+		/* check if projectile should be destroyed due to penetration */
+		if (proj->penetrations >= pb.penetrationPower &&
+			!pb.infinitePenetration)
+		{
+			/* set flag and decrement count */
+			_projBufferField[i] = 0;
+			_projCount--;
+		}
+	}
+}
+
+/* ============ MODULE MAIN FUNCTION ============ */
 static DWORD WINAPI vfMain(void* params)
 {
 	ULONGLONG lastTime = 0;
@@ -1531,6 +1974,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			/* handle velocity changes from collisions */
 			updateCollisionVelocities();
+
+			/* update projectiles */
+			updateProjectiles();
 
 			/* update phyiscs ages */
 			updatePhyiscsAges();
@@ -1608,6 +2054,7 @@ VFAPI void vfInit(void)
 	_pbCount = 0;
 	_eCount  = 0;
 	_atCount = 0;
+	_projCount = 0; _projBCount = 0;
 
 	/* set first attribute to be empty */
 	vfAttributeTable attribTableDefault = { 0 };
@@ -1670,6 +2117,13 @@ VFAPI void vfInit(void)
 		TRUE);
 	_eBufferField = vAlloc(sizeof(field) * VF_BUFFER_SIZE,
 		TRUE);
+
+	/* INIT PROJECTILE BUFFER */
+	_projBuffer = vAlloc(sizeof(vfProjectile) * VF_PROJCOUNT_DEFAULT,
+		TRUE);
+	_projBufferField = vAlloc(sizeof(field) * VF_PROJCOUNT_DEFAULT,
+		TRUE);
+	_projAllocated = VF_PROJCOUNT_DEFAULT;
 
 	/* init module main thread */
 	_killSignal   = FALSE;
@@ -2356,6 +2810,102 @@ VFAPI void vfRenderPartitions(void)
 	ReleaseMutex(_drawMutex);
 }
 
+static void renderProjectileTrailAlphaGroup(int aMin, int aMax)
+{
+	/* NEXT, RENDER ALL TRAILS */
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		/* on unused, skip */
+		if (!_projBufferField[i]) continue;
+
+		/* get object data */
+		vfProjectile* proj = _projBuffer + i;
+		vfProjectileBehavior* pb = _projBBuffer + proj->behaviorHandle;
+
+		/* on no trail, skip */
+		if (!pb->renderTrail) continue;
+
+		/* check if should be rendered */
+		if (pb->invisible) continue;
+		if (proj->age < pb->renderAgeStart) continue;
+
+		vgTextureFilterReset();
+		vgUseTexture(pb->texture);
+
+		/* render in decreasing alpha order */
+		vfVector renderPos = proj->position;
+		for (int i = 0; i < pb->renderTrail; i++)
+		{
+			/* get trail alpha */
+			int renderAlpha = max(0,
+				255 - (pb->renderTrailAlphaFalloff * i));
+
+			/* check if out of view */
+			if (!vgCheckIfViewable(proj->position.x, proj->position.y,
+				VF_PROJECTILE_CULLEXTRA)) continue;
+
+			/* check if should alpha skip*/
+			if (renderAlpha == 0   ||
+				renderAlpha > aMax ||
+				renderAlpha < aMin) continue;
+
+			/* set filter */
+			vgTextureFilter(255, 255, 255,
+				renderAlpha);
+
+			/* decrement draw position */
+			float lagX = proj->movement.x / pb->shapeScale;
+			float lagY = proj->movement.y / pb->shapeScale;
+			renderPos.x -= lagX * pb->renderTrailLag;
+			renderPos.y -= lagY * pb->renderTrailLag;
+
+			/* draw trail */
+			float renderScale = max(0, pb->shapeScale -
+				pb->renderTrailScaleFalloff * i);
+			vgDrawShapeTextured(pb->shape, renderPos.x,
+				renderPos.y, 0, renderScale);
+		}
+	}
+}
+
+VFAPI void vfRenderProjectiles(void)
+{
+	if (vgGetRenderSkipState()) return;
+
+	/* get write mutex */
+	int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0)
+		showMutexError("Write Mutex", "Could not draw projectiles!");
+
+	/* FIRST, RENDER ALL PROJECTILES */
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		if (!_projBufferField[i]) continue; /* on unused, continue */
+		
+		/* get object data */
+		vfProjectile* proj = _projBuffer + i;
+		vfProjectileBehavior* pb = _projBBuffer + proj->behaviorHandle;
+
+		/* check if should be rendered */
+		if (pb->invisible) continue;
+		if (proj->age < pb->renderAgeStart) continue;
+
+		vgRenderLayer(pb->layer);
+		vgTextureFilterReset();
+		vgUseTexture(pb->texture);
+		vgDrawShapeTextured(pb->shape, proj->position.x,
+			proj->position.y, 0, pb->shapeScale);
+	}
+
+	/* RENDER TRAIL ALPHA GROUPS */
+	renderProjectileTrailAlphaGroup(0x80, 0xFF);
+	renderProjectileTrailAlphaGroup(0x20, 0x80);
+	renderProjectileTrailAlphaGroup(0x00, 0x20);
+
+	/* release write mutex */
+	ReleaseMutex(_writeMutex);
+}
+
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value)
 {
@@ -2467,6 +3017,40 @@ VFAPI void vfLogPhysicsCollisionData(FILE* file)
 	fprintf(file, "Time taken to calculate: %d ms\n",
 		_pCollisionCheckTime);
 	fflush(file);
+}
+
+VFAPI int vfCheckPointOverlap(vfVector point, vfBound* bound,
+	float leniency)
+{
+	/* make bound origin point */
+	point.x -= bound->body->position.x;
+	point.y -= bound->body->position.y;
+
+	/* rotate and scale point so that coordinate frame is relative */
+	/* to bound */
+	point = vertRotateScale(point, -bound->body->rotation,
+		1.0f / bound->body->scale);
+
+	/* check for overlap */
+	int overlapCheck = 0;
+
+	/* get min and max of all bound vertexes */
+	float xMin = min(bound->position.x,
+		bound->position.x + bound->dimensions.x);
+	float xMax = max(bound->position.x,
+		bound->position.x + bound->dimensions.x);
+	float yMin = min(bound->position.y,
+		bound->position.y + bound->dimensions.y);
+	float yMax = max(bound->position.y,
+		bound->position.y + bound->dimensions.y);
+
+	/* test for overlap */
+	if (point.x > xMin - leniency) overlapCheck++;
+	if (point.x < xMax + leniency) overlapCheck++;
+	if (point.y > yMin - leniency) overlapCheck++;
+	if (point.y < yMax + leniency) overlapCheck++;
+
+	return (overlapCheck == 4);
 }
 
 /* ========== PARTICLE RELATED FUNCTIONS ========== */
@@ -2592,8 +3176,150 @@ VFAPI void vfSetEntityAttribHandle(vfEntity* entity, vfHandle handle)
 		_atBuffer[handle].attribByteCount);
 }
 
+/* ========== PROJECTILE RELATED FUNCTIONS ========== */
+VFAPI vfHandle vfCreateProjectileBehavior(vgShape shape, vgTexture texture,
+	uint8_t penetrationPower, float speed, float scale, vfLifeTime lifeTime)
+{
+	/* full check */
+	if (_projBCount >= VF_PROJBEHAVIORS_MAX) return -1;
 
-/* ========= DATA RELATED FUNCTION ========== */
+	/* get next projectile behavior and zero memory */
+	vfProjectileBehavior* pbh = _projBBuffer + _projBCount;
+	ZeroMemory(pbh, sizeof(vfProjectileBehavior));
+
+	/* set all values */
+	pbh->shape = shape;
+	pbh->texture = texture;
+	pbh->penetrationPower = penetrationPower;
+	pbh->speed = speed;
+	pbh->shapeScale = scale;
+	pbh->boundScale = scale;
+	pbh->maxAge = lifeTime;
+
+	/* increment count and return */
+	_projBCount++;
+	return _projBCount - 1;
+}
+
+VFAPI vfHandle vfCreateProjectileBehaviorS(vfProjectileBehavior toCreate)
+{
+	/* full check */
+	if (_projBCount >= VF_PROJBEHAVIORS_MAX) return -1;
+
+	/* get next projectile behavior and zero memory */
+	vfProjectileBehavior* pbh = _projBBuffer + _projBCount;
+	ZeroMemory(pbh, sizeof(vfProjectileBehavior));
+
+	/* copy over data */
+	*pbh = toCreate;
+
+	/* increment count and return */
+	_projBCount++;
+	return _projBCount - 1;
+}
+
+VFAPI vfProjectileBehavior vfGetProjectileBehavior(vfHandle pbHandle)
+{
+	return _projBBuffer[pbHandle];
+}
+
+VFAPI vfProjectileBehavior* vfGetProjectileBehaviorPTR(vfHandle pbHandle)
+{
+	return (_projBBuffer + pbHandle);
+}
+
+VFAPI vfHandle vfCreateProjectileV(vfEntity* source, vfHandle behavior,
+	vfVector direction)
+{
+	vfVector polar = cartesianToPolar(direction);
+	return vfCreateProjectileR(source, behavior, polar.y * 57.2958f);
+}
+
+static vfHandle createProjectileSingle(vfEntity* source,
+	vfProjectileBehavior pb, vfHandle pbh,  float angle)
+{
+	/* make sure projectile buffer is big enough */
+	ensureProjectileBufferSize();
+
+	/* search for free projectile */
+	int startIndex = _projCount / 2;
+	for (int i = 0; i < _projAllocated; i++)
+	{
+		int indexActual = (startIndex + i) % _projAllocated;
+
+		/* if taken, skip */
+		if (_projBufferField[indexActual]) continue;
+
+		/* on free buffer spot */
+		_projBufferField[indexActual] = 1; /* mark used */
+		vfProjectile* proj = _projBuffer + indexActual; /* get proj ptr */
+
+		/* set values */
+		proj->age = 0;
+		proj->penetrations = 0;
+		proj->lastPenetrated = NULL;
+
+		proj->behaviorHandle = pbh;
+		proj->source = source;
+		proj->position = source->transform->position;
+
+		/* randomize angle */
+		angle += seededRandomFLOAT(indexActual, pb.spread);
+
+		/* calculate speed */
+		float speed = pb.speed + seededRandomFLOAT(indexActual,
+			pb.speedVariation);
+
+		proj->movement = polarToCartesian(speed,
+			angle * 0.0174533);
+
+		/* accumulate speed */
+		proj->movement.x += source->physics.velocity.x;
+		proj->movement.y += source->physics.velocity.y;
+
+		/* increment projectile count */
+		_projCount++;
+
+		return indexActual;
+	}
+}
+
+VFAPI vfHandle vfCreateProjectileR(vfEntity* source, vfHandle behavior,
+	float direction)
+{
+	vfProjectileBehavior pb = _projBBuffer[behavior];
+	vfHandle returnValue = 0;
+	for (int i = 0; i < pb.pelletCount; i++)
+	{
+		int temp = createProjectileSingle(source, pb, behavior, direction);
+		if (i == 0) returnValue = temp;
+	}
+	return returnValue;
+}
+
+VFAPI vfProjectile* vfGetProjectile(vfHandle handle)
+{
+	return _projBuffer + handle;
+}
+
+VFAPI void vfDestroyProjectile(vfProjectile* projectile)
+{
+	/* get buffer mutex */
+	int result = WaitForSingleObject(_writeMutex, VF_WMUTEX_TIMEOUT);
+	if (result != WAIT_OBJECT_0) showMutexError("Write Mutex",
+		"Could not destroy projectile");
+
+	/* clear flags and decrement count */
+	int index = _projBuffer - projectile;
+	_projBufferField[index] = 0;
+	_projCount--;
+
+	/* release buffer mutex */
+	ReleaseMutex(_writeMutex);
+}
+
+
+/* ========= DATA RELATED FUNCTIONS ========== */
 
 VFAPI void vfGetEntityPartitions(vfEntity* ent, int maxPartitions,
 	int* xBuff, int* yBuff, int* xSize, int* ySize)
@@ -2627,6 +3353,9 @@ VFAPI void* vfGetBuffer(int type)
 
 	case VF_BUFF_PARTITION:
 		return _partBuff;
+
+	case VF_BUFF_PROJECTILE:
+		return _projBuffer;
 	
 	/* fail condition */
 	default:
@@ -2650,6 +3379,9 @@ VFAPI void* vfGetBufferField(int type)
 
 	case VF_BUFF_ENTITY:
 		return _eBufferField;
+
+	case VF_BUFF_PROJECTILE:
+		return _projBufferField;
 
 	default:
 		return NULL;
@@ -2676,6 +3408,10 @@ VFAPI int vfGetObjectCount(int type)
 
 	case VF_OBJ_ENTITY:
 		count = _eCount;
+		break;
+
+	case VF_OBJ_PROJECTILE:
+		count = _projCount;
 		break;
 
 	default:
