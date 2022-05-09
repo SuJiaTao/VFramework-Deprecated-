@@ -226,13 +226,14 @@ typedef struct vfProjectileBehavior
 	vfFlag invisible   : 1;          /* should projectile be rendered     */
 	vfFlag destroyOnStopMoving  : 1; /* destroy once velocity is 0        */
 
-	uint8_t penetrationPower;    /* bounds projectile can pass through      */
- 	float   penetrationChance;   /* percent of penetration                  */
-	float   penetrationScatter;  /* direction change per penetration        */
-	float   penetrationSlowdown; /* slowdown scale 1.0f = stop, 0.5f = half */
+	uint8_t penetrationPower;    /* bounds projectile can pass through  */
+ 	float   penetrationChance;   /* percent of penetration              */
+	float   penetrationScatter;  /* direction change per penetration    */
+	float   penetrationSlowdown; /* slowdown scale 1 = stop, 0.5 = half */
 
 	float ricochetChance;   /* chance of doing a 180 upon penetration  */
 	float ricochetScatter;  /* variation on the ricochet angle         */
+	float ricochetSlowdown; /* slowdown scale 1 = stop, 0.5 = half     */
 
 	vfHandle shrapnelBehavior; /* shrapnel behavior        */
 	float    shrapnelChance;   /* shrapnel chance 0f - 1f  */

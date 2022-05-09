@@ -1840,6 +1840,9 @@ static void updateProjectiles(void)
 			ricoPolar.y += seededRandomFLOAT(i + _tickCount,
 				pb.ricochetScatter) * 0.0174533f;
 
+			/* slow down vector magnitude */
+			ricoPolar.x *= (1.0f - pb.ricochetSlowdown);
+
 			/* convert back to cartesian */
 			proj->movement = polarToCartesian(ricoPolar.x,
 				ricoPolar.y);
