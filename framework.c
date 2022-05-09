@@ -13,6 +13,7 @@
 *		- Internal particle functions
 *		- Internal attribute functions
 *		- Internal projectile functions
+*		- Internal explosion functions
 *		- Init and terminate functions
 *		- Struct creation functions
 *		- Struct destruction functions
@@ -22,6 +23,7 @@
 *		- Particle functions
 *		- Attribute functions
 *		- Projectile functions
+*		- Explosion functions
 *		- Data functions
 *
 ******************************************************************************/
@@ -3337,6 +3339,77 @@ VFAPI void vfDestroyProjectile(vfProjectile* projectile)
 	ReleaseMutex(_writeMutex);
 }
 
+
+/* EXPLOSION RELATED FUNCTIONS */
+VFAPI vfHandle vfCreateExplosionBehavior(vfExplosionBehavior reference)
+{
+	/* bad size check */
+	if (_expBCount >= VF_EXPBEHAVIORS_MAX) return -1;
+
+	/* find free index */
+	int addedIndex = _expBCount;
+	_expBBuffer[addedIndex] = reference;
+
+	/* increment and return */
+	_expBCount++;
+	return addedIndex;
+}
+
+VFAPI vfExplosionBehavior  vfGetExplosionBehavior(vfHandle handle)
+{
+	return _expBBuffer[handle];
+}
+
+VFAPI vfExplosionBehavior* vfGetExplosionBehaviorPTR(vfHandle handle)
+{
+	return _expBBuffer + handle;
+}
+
+VFAPI vfExplosion* vfCreateExplosionV(vfVector position, vfHandle behavior)
+{
+	/* find free buffer spot */
+	for (int i = 0; i < VF_EXPLOSIONS_MAX; i++)
+	{
+		/* on free spot */
+		if (!_expBufferField[i])
+		{
+			/* get explosion */
+			vfExplosion* exp = _expBuffer + i;
+
+			/* set members and return */
+			exp->position = position;
+			exp->age = 0;
+			exp->behavior = behavior;
+			exp->shockwaveDistance = 0;
+			exp->source = NULL;
+
+			_expCount++;
+			return exp;
+		}
+	}
+
+	/* on exit, show error */
+	MessageBoxA(NULL, "Explosion Buffer Full!\n",
+		"FATAL ENGINE ERROR", MB_OK);
+	exit(1);
+	return -1;
+}
+
+VFAPI vfExplosion* vfCreateExplosionE(vfEntity* source, vfHandle behavior)
+{
+	vfExplosion* ent = vfCreateExplosionV(source->transform->position,
+		behavior);
+	ent->source = source;
+	return ent;
+}
+
+VFAPI void vfDestroyExplosion(vfExplosion* toDestroy)
+{
+	int index = _expBuffer - toDestroy;
+	_expBufferField[index] = 0;
+	_expCount--;
+	return;
+}
 
 /* ========= DATA RELATED FUNCTIONS ========== */
 

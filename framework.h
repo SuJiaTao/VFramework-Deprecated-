@@ -460,6 +460,15 @@ VFAPI vfHandle vfCreateProjectileR(vfEntity* source, vfHandle behavior,
 VFAPI vfProjectile* vfGetProjectile(vfHandle handle);
 VFAPI void vfDestroyProjectile(vfProjectile* projectile);
 
+/* EXPLOSION RELATED FUNCTIONS */
+VFAPI vfHandle vfCreateExplosionBehavior(vfExplosionBehavior reference);
+VFAPI vfExplosionBehavior  vfGetExplosionBehavior(vfHandle handle);
+VFAPI vfExplosionBehavior* vfGetExplosionBehaviorPTR(vfHandle handle);
+VFAPI vfExplosion* vfCreateExplosionV(vfVector position, vfHandle behavior);
+VFAPI vfExplosion* vfCreateExplosionE(vfEntity* source, vfHandle behavior );
+VFAPI void vfDestroyExplosion(vfExplosion* toDestroy);
+
+
 /* DATA RELATED FUNCTIONS */
 VFAPI void* vfGetBuffer(int type);
 VFAPI void* vfGetBufferField(int type);
