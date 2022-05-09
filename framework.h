@@ -109,6 +109,9 @@
 #define VF_PROJ_PRECISION 10.0f
 #define VF_PROJ_MAXSTEPS  0x80
 
+#define VF_EXPBEHAVIORS_MAX 0x80
+#define VF_EXPLOSIONS_MAX   0x800
+
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
 #define COLORA(r, g, b, a)     vfCreateColor(r, g, b, a)
@@ -298,7 +301,8 @@ typedef struct vfProjectile
 typedef struct vfExplosionBehavior
 {
 	vfFlag instantPush : 1; /* push all in radius at once */
-	vfFlag infiniteAge : 1; /* no age limit */
+	vfFlag infiniteAge : 1; /* no age limit   */
+	vfFlag invisible   : 1; /* should render? */
 
 	float radius;             /* max affected radius */
 	vfLifeTime lifetime;      /* time allowed to live */
@@ -307,7 +311,6 @@ typedef struct vfExplosionBehavior
 	float shockwaveSpeed;          /* distance per move step    */
 	float shockwaveSpeedVariation; /* shockwave speed variation */
 	float shockwaveSpeedDecay;     /* speed slowdown per update */
-	float shockwaveSize;           /* shockwave push size       */
 
 	float pushFactor; /* percent of shockwave speed to move entities */
 	float pushforceVariation; /* factor variation            */
@@ -323,7 +326,7 @@ typedef struct vfExplosionBehavior
 typedef struct vfExplosion
 {
 	vfEntity* source;   /* source entity (optional) */
-	vfVector  position; /* creation position */
+	vfVector  position; /* creation position        */
 
 	vfHandle  behavior; /* explosion behavior */
 

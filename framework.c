@@ -100,6 +100,13 @@ static vfProjectile* _projBuffer; static field* _projBufferField;
 static int _projAllocated;
 static int _projCount;
 
+/* EXPLOSION BUFFERS */
+static vfExplosionBehavior _expBBuffer[VF_EXPBEHAVIORS_MAX];
+static int _expBCount;
+static vfExplosion* _expBuffer;
+static field* _expBufferField;
+static int _expCount;
+
 /* boundQuad struct definition */
 typedef struct boundQuad
 {
@@ -2055,6 +2062,7 @@ VFAPI void vfInit(void)
 	_eCount  = 0;
 	_atCount = 0;
 	_projCount = 0; _projBCount = 0;
+	_expCount = 0;  _expBCount = 0;
 
 	/* set first attribute to be empty */
 	vfAttributeTable attribTableDefault = { 0 };
@@ -2125,6 +2133,12 @@ VFAPI void vfInit(void)
 		TRUE);
 	_projAllocated = VF_PROJCOUNT_DEFAULT;
 
+	/* INIT EXPLOSION BUFFER */
+	_expBuffer = vAlloc(sizeof(vfExplosion) * VF_EXPLOSIONS_MAX,
+		TRUE);
+	_expBufferField = vAlloc(sizeof(field) * VF_EXPLOSIONS_MAX,
+		TRUE);
+
 	/* init module main thread */
 	_killSignal   = FALSE;
 	_killRecieved = FALSE;
@@ -2149,6 +2163,8 @@ VFAPI void vfTerminate(void)
 	vFree(_pbBuffer);
 	vFree(_bqBuffer);
 	vFree(_tFinalBuffer);
+	vFree(_projBuffer);
+	vFree(_expBuffer);
 
 	/* free all entity attribute data */
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
@@ -2156,6 +2172,7 @@ VFAPI void vfTerminate(void)
 		if (_eBuffer[i].attribBlock != NULL)
 			HeapFree(_heap, FALSE, _eBuffer[i].attribBlock);
 	}
+
 	/* free entity buffer */
 	vFree(_eBuffer);
 
@@ -2164,6 +2181,8 @@ VFAPI void vfTerminate(void)
 	vFree(_bBufferField);
 	vFree(_pBufferField);
 	vFree(_eBufferField);
+	vFree(_projBufferField);
+	vFree(_expBufferField);
 
 	/* free all partitions */
 	for (int i = 0; i < _partitionsAllocated; i++)
