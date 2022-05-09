@@ -1907,6 +1907,143 @@ static void updateProjectiles(void)
 	}
 }
 
+
+/* ========== INTERNAL EXPLOSION FUNCTIONS ========== */
+
+
+static void getPartitionBoundEntIndexes(int partX, int partY, 
+	int* indexBuffer, int* bufferUse, int bufferMax)
+{
+	/* search for partition */
+	partition* part = NULL;
+	for (int i = 0; i < _partitionCount; i++)
+	{
+		/* on collide, break */
+		partition* checkPart = _partBuff + i;
+		if (checkPart->x == partX &&
+			checkPart->y == partY   )
+		{
+			part = checkPart;
+			break;
+		}
+	}
+
+	/* on not found, return */
+	if (part == NULL) return;
+
+	/* loop through partition and add bound index */
+	for (int i = 0; i < part->bqCount; i++)
+	{
+		/* get check index */
+		int checkIndex = part->bqIndexes[i];
+		int collisionResult = 0;
+
+		/* check for collide */
+		for (int j = 0; j < *bufferUse; j++)
+		{
+			if (indexBuffer[j] != checkIndex) continue;
+
+			/* on collide, set flag and break */
+			collisionResult = 1;
+			break;
+		}
+
+		/* on collision, skip */
+		if (collisionResult) continue;
+
+		/* if bound has no entity, skip */
+		if (!_bqBuffer[checkIndex].staticData.entity) continue;
+
+		/* add index and increment bufferuse */
+		if (*bufferUse + 1 > bufferMax) return;
+		indexBuffer[*bufferUse] = checkIndex;
+		(*bufferUse)++;
+	}
+}
+
+static void getAllAffected(vfExplosion* source,
+	vfExplosionBehavior bhv)
+{
+	/* buffer for all entity indexes */
+	int indexBuffer[VF_EXPAFFECT_MAX];
+	int buffUse = 0;
+
+	/* get minimum explosion partitions */
+	float minPosX = source->position.x - bhv.radius;
+	float minPosY = source->position.y - bhv.radius;
+	int minpartX, minpartY;
+
+	/* account for sign */
+	if (minPosX > 0)
+		minpartX = minPosX / _partitionSize;
+	else
+		minpartX = floorl(minPosX / _partitionSize);
+
+	if (minPosY > 0)
+		minpartY = minPosY / _partitionSize;
+	else
+		minpartY = floorl(minPosX / _partitionSize);
+
+	/* account for range */
+	int partRange = ceill((bhv.radius * 2.0f) / _partitionSize);
+
+	/* populate buffer based on partition range */
+	for (int i = minpartX; i < minpartX + partRange; i++)
+	{
+		for (int j = minpartY; j < minpartY + partRange; j++)
+		{
+			getPartitionBoundEntIndexes(i, j,
+				indexBuffer, &buffUse, VF_EXPAFFECT_MAX);
+		}
+	}
+
+	/* allocate explosion entity buffer */
+	if (source->affectEnts)
+		vFree(source->affectEnts);
+	source->affectEnts = vAlloc(sizeof(vfEntity*) * buffUse, FALSE);
+
+	/* populate entity buffer */
+	for (int i = 0; i < buffUse; i++)
+	{
+		source->affectEnts[i] = _bBuffer[indexBuffer[i]].entity;
+	}
+	source->affectCount = buffUse;
+}
+
+static void updateExplosions(void)
+{
+	int counter = 0;
+	for (int i = 0; i < VF_EXPLOSIONS_MAX; i++)
+	{
+		/* on checked all, break */
+		if (counter >= _expCount) break;
+
+		/* on unused, skip */
+		if (!_expBufferField[i]) continue;
+
+		/* get explosion object and behavior */
+		vfExplosion* exp = _eBuffer + i;
+		vfExplosionBehavior bhv = _expBBuffer[exp->behavior];
+
+		/* if explosion age is 0, populate buffer */
+		/* and call creation callback             */
+		if (exp->age == 0)
+		{
+			getAllAffected(exp, bhv);
+
+			if (bhv.createCallback)
+				bhv.createCallback(exp);
+		}
+
+		/* get actual speed and dampen */
+		float speedActual = bhv.shockwaveSpeed +
+			seededRandomFLOAT(exp->spawnAge, bhv.shockwaveSpeedVariation);
+		speedActual *= max(1.0f, powf(bhv.shockwaveSpeedDecay,
+			exp->age));
+
+	}
+}
+
 /* ============ MODULE MAIN FUNCTION ============ */
 static DWORD WINAPI vfMain(void* params)
 {
@@ -3382,6 +3519,9 @@ VFAPI vfExplosion* vfCreateExplosionV(vfVector position, vfHandle behavior)
 			exp->behavior = behavior;
 			exp->shockwaveDistance = 0;
 			exp->source = NULL;
+			exp->affectCount = 0;
+			exp->affectEnts = NULL;
+			exp->spawnAge = _tickCount;
 
 			_expCount++;
 			return exp;
@@ -3405,7 +3545,12 @@ VFAPI vfExplosion* vfCreateExplosionE(vfEntity* source, vfHandle behavior)
 
 VFAPI void vfDestroyExplosion(vfExplosion* toDestroy)
 {
+	/* get index and free */
 	int index = _expBuffer - toDestroy;
+	if (toDestroy->affectEnts)
+		vFree(toDestroy->affectEnts);
+
+	/* clear field and decrement count */
 	_expBufferField[index] = 0;
 	_expCount--;
 	return;

@@ -111,6 +111,7 @@
 
 #define VF_EXPBEHAVIORS_MAX 0x80
 #define VF_EXPLOSIONS_MAX   0x800
+#define VF_EXPAFFECT_MAX    0x200
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
@@ -141,7 +142,7 @@ typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile* projectile,
 typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile* projectile);
 typedef PROJTILMAXAGECALLBACK PROJTILESTOPMOVECALLBACK;
 typedef void (*EXPLOSIONCREATECALLBACK)(struct vfExplosion* explosion);
-typedef void (*EXPLOSIONCOLLIDECALBACK)(struct vfExplosion* source,
+typedef void (*EXPLOSIONPUSHCALLBACK)(struct vfExplosion* source,
 	struct vfEntity* affected);
 
 /* STRUCTURE DEFINITIONS */
@@ -313,14 +314,14 @@ typedef struct vfExplosionBehavior
 	float shockwaveSpeedDecay;     /* speed slowdown per update */
 
 	float pushFactor; /* percent of shockwave speed to move entities */
-	float pushforceVariation; /* factor variation            */
-	float pushAngleVariation; /* push vector angle variation */
+	float pushFactorVariation; /* factor variation            */
+	float pushAngleVariation;  /* push vector angle variation */
 
 	float pushFalloff; /* factor falloff per shockwave step */
 	float pushFalloffVariation; /* variation on falloff     */
 
-	EXPLOSIONCREATECALLBACK createCallback;    /* calls on create */
-	EXPLOSIONCOLLIDECALBACK collisionCallback; /* calls on push   */
+	EXPLOSIONCREATECALLBACK createCallback; /* calls on create */
+	EXPLOSIONPUSHCALLBACK   pushCallback;   /* calls on push   */
 } vfExplosionBehavior;
 
 typedef struct vfExplosion
@@ -330,7 +331,11 @@ typedef struct vfExplosion
 
 	vfHandle  behavior; /* explosion behavior */
 
-	vfLifeTime age; /* explosion age */
+	vfLifeTime spawnAge; /* time of creation */
+	vfLifeTime age;      /* explosion age */
+
+	int affectCount;      /* number of affected entities */
+	struct vfEntity** affectEnts; /* entities affected    */
 
 	float shockwaveDistance; /* distance shockwave has travelled */
 
