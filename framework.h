@@ -23,6 +23,7 @@
 *		- Particle functions
 *		- Attribute functions
 *		- Projectile functions
+*		- Explosion functions
 *		- Data related functions
 * 
 ******************************************************************************/
@@ -136,6 +137,9 @@ typedef void (*PROJTILECOLCALLBACK)(struct vfProjectile* projectile,
 	struct vfEntity* hitObject);
 typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile* projectile);
 typedef PROJTILMAXAGECALLBACK PROJTILESTOPMOVECALLBACK;
+typedef void (*EXPLOSIONCREATECALLBACK)(struct vfExplosion* explosion);
+typedef void (*EXPLOSIONCOLLIDECALBACK)(struct vfExplosion* source,
+	struct vfEntity* affected);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -290,6 +294,44 @@ typedef struct vfProjectile
 
 	vfHandle behaviorHandle; /* projectile behavior */
 } vfProjectile;
+
+typedef struct vfExplosionBehavior
+{
+	vfFlag instantPush : 1; /* push all in radius at once */
+	vfFlag infiniteAge : 1; /* no age limit */
+
+	float radius;             /* max affected radius */
+	vfLifeTime lifetime;      /* time allowed to live */
+	vfLifeTime minRenderTime; /* time to start rendering */
+
+	float shockwaveSpeed;          /* distance per move step    */
+	float shockwaveSpeedVariation; /* shockwave speed variation */
+	float shockwaveSpeedDecay;     /* speed slowdown per update */
+	float shockwaveSize;           /* shockwave push size       */
+
+	float pushFactor; /* percent of shockwave speed to move entities */
+	float pushforceVariation; /* factor variation            */
+	float pushAngleVariation; /* push vector angle variation */
+
+	float pushFalloff; /* factor falloff per shockwave step */
+	float pushFalloffVariation; /* variation on falloff     */
+
+	EXPLOSIONCREATECALLBACK createCallback;    /* calls on create */
+	EXPLOSIONCOLLIDECALBACK collisionCallback; /* calls on push   */
+} vfExplosionBehavior;
+
+typedef struct vfExplosion
+{
+	vfEntity* source;   /* source entity (optional) */
+	vfVector  position; /* creation position */
+
+	vfHandle  behavior; /* explosion behavior */
+
+	vfLifeTime age; /* explosion age */
+
+	float shockwaveDistance; /* distance shockwave has travelled */
+
+} vfExplosion;
 
 typedef struct vfAttributeTable
 {
