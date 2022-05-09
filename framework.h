@@ -338,6 +338,7 @@ typedef struct vfExplosion
 	struct vfEntity** affectEnts; /* entities affected    */
 
 	float shockwaveDistance; /* distance shockwave has travelled */
+	float previousShockwaveDistance; /* distance of wave before  */
 
 } vfExplosion;
 

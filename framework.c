@@ -2038,10 +2038,64 @@ static void updateExplosions(void)
 		/* get actual speed and dampen */
 		float speedActual = bhv.shockwaveSpeed +
 			seededRandomFLOAT(exp->spawnAge, bhv.shockwaveSpeedVariation);
-		speedActual *= max(1.0f, powf(bhv.shockwaveSpeedDecay,
+		speedActual *= min(1.0f, powf(bhv.shockwaveSpeedDecay,
 			exp->age));
 
-	}
+		/* increment shockwave distance by actual speed */
+		exp->shockwaveDistance += speedActual;
+
+		/* check all affected entities */
+		for (int j = 0; j < exp->affectCount; j++)
+		{
+			/* get entity to push */
+			vfEntity* pushEnt = exp->affectEnts[j];
+
+			/* get offset */
+			float distX = exp->position.x - pushEnt->transform->position.x;
+			float distY = exp->position.y - pushEnt->transform->position.y;
+
+			/* if floor of distance is 0, add random value to it */
+			if (floorf(min(distX, distY)) == 0)
+			{
+				distX += randomFLOAT(1.0f);
+				distY += randomFLOAT(1.0f);
+			}
+
+			/* get distance magnitude and check if in range  */
+			float dist  = hypotf(distX, distY);
+
+			if (roundf(dist) < roundf(exp->shockwaveDistance) &&
+				roundf(dist) > roundf(exp->previousShockwaveDistance))
+			{
+				/* get angle and apply variation */
+				float angle = atan2f(distY, distX) * 57.2958;
+				angle += seededRandomFLOAT(exp->spawnAge + j,
+					bhv.pushAngleVariation);
+
+				/* calculate pushfactor */
+				float pushfactor = bhv.pushFactor +
+					seededRandomFLOAT(exp->spawnAge + j,
+						bhv.pushFactorVariation);
+
+				/* calculate falloff and apply falloff */
+				float pushfalloff = bhv.pushFalloff +
+					seededRandomFLOAT(exp->spawnAge + j,
+						bhv.pushFactorVariation);
+				pushfactor *= min(1.0f, powf(pushfalloff, exp->spawnAge));
+
+				/* convert back to cartesian and apply vector to entity */
+				vfVector pushVector = polarToCartesian(speedActual * 
+					pushfactor, angle);
+				pushEnt->physics.velocity.x += pushVector.x;
+				pushEnt->physics.velocity.y += pushVector.y;
+
+				/* try callback */
+				if (bhv.pushCallback)
+					bhv.pushCallback(exp, pushEnt);
+			} /* PUSH CHECK END */
+		} /* ENT CHECK LOOP END */
+		counter++;
+	} /* EXPLOSION LOOP END */
 }
 
 /* ============ MODULE MAIN FUNCTION ============ */
@@ -3517,7 +3571,10 @@ VFAPI vfExplosion* vfCreateExplosionV(vfVector position, vfHandle behavior)
 			exp->position = position;
 			exp->age = 0;
 			exp->behavior = behavior;
+
 			exp->shockwaveDistance = 0;
+			exp->previousShockwaveDistance = 0;
+
 			exp->source = NULL;
 			exp->affectCount = 0;
 			exp->affectEnts = NULL;
