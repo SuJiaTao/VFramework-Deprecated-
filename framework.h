@@ -57,8 +57,8 @@
 #define VF_ENTITY_CULLEXTRA      0.25f
 #define VF_PROJECTILE_CULLEXTRA  0.025f
 
-#define VF_WMUTEX_TIMEOUT 0xFF
-#define VF_RMUTEX_TIMEOUT 0xFF
+#define VF_WMUTEX_TIMEOUT 0x1000
+#define VF_RMUTEX_TIMEOUT 0x1000
 
 #define VF_PUSHBACK_RATIO_NOENT 1.15f
 #define VF_PUSHBACK_MAGNITUDE_MAX 0x40
@@ -112,6 +112,7 @@
 #define VF_EXPBEHAVIORS_MAX 0x80
 #define VF_EXPLOSIONS_MAX   0x800
 #define VF_EXPAFFECT_MAX    0x200
+#define VF_EXPRENDER_VERTS  0xA
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
@@ -301,17 +302,12 @@ typedef struct vfProjectile
 
 typedef struct vfExplosionBehavior
 {
-	vfFlag instantPush : 1; /* push all in radius at once */
-	vfFlag infiniteAge : 1; /* no age limit   */
-	vfFlag invisible   : 1; /* should render? */
-
 	float radius;             /* max affected radius */
-	vfLifeTime lifetime;      /* time allowed to live */
-	vfLifeTime minRenderTime; /* time to start rendering */
 
 	float shockwaveSpeed;          /* distance per move step    */
 	float shockwaveSpeedVariation; /* shockwave speed variation */
 	float shockwaveSpeedDecay;     /* speed slowdown per update */
+	float shockwaveThickness;      /* how thick is push zone    */
 
 	float pushFactor; /* percent of shockwave speed to move entities */
 	float pushFactorVariation; /* factor variation            */
@@ -326,7 +322,7 @@ typedef struct vfExplosionBehavior
 
 typedef struct vfExplosion
 {
-	vfEntity* source;   /* source entity (optional) */
+	struct vfEntity* source;   /* source entity (optional) */
 	vfVector  position; /* creation position        */
 
 	vfHandle  behavior; /* explosion behavior */
@@ -417,6 +413,7 @@ VFAPI void vfRenderEntities(void);
 VFAPI void vfRenderBounds(void);
 VFAPI void vfRenderPartitions(void);
 VFAPI void vfRenderProjectiles(void);
+VFAPI void vfRenderExplosions(void);
 
 /* PHYSICS RELATED FUNCTIONS */
 VFAPI void vfSetPhysicsState(int value);

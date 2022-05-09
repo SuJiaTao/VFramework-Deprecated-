@@ -1977,12 +1977,12 @@ static void getAllAffected(vfExplosion* source,
 	if (minPosX > 0)
 		minpartX = minPosX / _partitionSize;
 	else
-		minpartX = floorl(minPosX / _partitionSize);
+		minpartX = floorf(minPosX / _partitionSize);
 
 	if (minPosY > 0)
 		minpartY = minPosY / _partitionSize;
 	else
-		minpartY = floorl(minPosX / _partitionSize);
+		minpartY = floorf(minPosY / _partitionSize);
 
 	/* account for range */
 	int partRange = ceill((bhv.radius * 2.0f) / _partitionSize);
@@ -2022,7 +2022,7 @@ static void updateExplosions(void)
 		if (!_expBufferField[i]) continue;
 
 		/* get explosion object and behavior */
-		vfExplosion* exp = _eBuffer + i;
+		vfExplosion* exp = _expBuffer + i;
 		vfExplosionBehavior bhv = _expBBuffer[exp->behavior];
 
 		/* if explosion age is 0, populate buffer */
@@ -2038,8 +2038,10 @@ static void updateExplosions(void)
 		/* get actual speed and dampen */
 		float speedActual = bhv.shockwaveSpeed +
 			seededRandomFLOAT(exp->spawnAge, bhv.shockwaveSpeedVariation);
-		speedActual *= min(1.0f, powf(bhv.shockwaveSpeedDecay,
-			exp->age));
+		float decayFactor = min(1.0f,
+			powf(1.0f - bhv.shockwaveSpeedDecay, exp->age));
+		speedActual *= decayFactor;
+		speedActual = max(0.0f, speedActual);
 
 		/* increment shockwave distance by actual speed */
 		exp->shockwaveDistance += speedActual;
@@ -2064,8 +2066,9 @@ static void updateExplosions(void)
 			/* get distance magnitude and check if in range  */
 			float dist  = hypotf(distX, distY);
 
-			if (roundf(dist) < roundf(exp->shockwaveDistance) &&
-				roundf(dist) > roundf(exp->previousShockwaveDistance))
+			if (floorf(dist) < ceilf(exp->shockwaveDistance) &&
+				ceilf(dist) > floorf(exp->previousShockwaveDistance
+					- bhv.shockwaveThickness));
 			{
 				/* get angle and apply variation */
 				float angle = atan2f(distY, distX) * 57.2958;
@@ -2081,19 +2084,35 @@ static void updateExplosions(void)
 				float pushfalloff = bhv.pushFalloff +
 					seededRandomFLOAT(exp->spawnAge + j,
 						bhv.pushFactorVariation);
-				pushfactor *= min(1.0f, powf(pushfalloff, exp->spawnAge));
+				pushfactor -= pushfalloff * exp->spawnAge;
+				pushfactor = max(0.0f, pushfactor);
 
 				/* convert back to cartesian and apply vector to entity */
 				vfVector pushVector = polarToCartesian(speedActual * 
-					pushfactor, angle);
-				pushEnt->physics.velocity.x += pushVector.x;
-				pushEnt->physics.velocity.y += pushVector.y;
+					pushfactor, angle * 0.0174533f);
+
+				pushEnt->physics.velocity.x -= pushVector.x;
+				pushEnt->physics.velocity.y -= pushVector.y;
 
 				/* try callback */
 				if (bhv.pushCallback)
 					bhv.pushCallback(exp, pushEnt);
 			} /* PUSH CHECK END */
 		} /* ENT CHECK LOOP END */
+
+		/* increment age */
+		exp->age++;
+
+		/* on max radius or speed == 0, destroy */
+		if (exp->shockwaveDistance > bhv.radius ||
+			floorf(speedActual) == 0.0f)
+		{
+			vfDestroyExplosion(exp);
+		}
+
+		/* update previous shockwave distance */
+		exp->previousShockwaveDistance = exp->shockwaveDistance;
+
 		counter++;
 	} /* EXPLOSION LOOP END */
 }
@@ -2202,6 +2221,9 @@ static DWORD WINAPI vfMain(void* params)
 
 			/* update particles */
 			updateParticles();
+
+			/* update explosions */
+			updateExplosions();
 		}
 		else
 		{
@@ -2902,6 +2924,7 @@ VFAPI void vfRenderBounds(void)
 	vgLineSize(2.5f);
 	int bRendered = 0;
 
+	/* render all bounds */
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
 	{
 		if (bRendered >= _bCount) break;
@@ -2953,6 +2976,39 @@ VFAPI void vfRenderBounds(void)
 		/* increment render count */
 		bRendered++;
 	}
+	
+
+	/* render all explosion bounds */
+	for (int i = 0; i < VF_EXPLOSIONS_MAX; i++)
+	{
+		vfExplosion* exp = _expBuffer + i;
+
+		/* on unused, skip */
+		if (!_expBufferField[i]) continue;
+
+		/* render center point */
+		vgColor3(0xFF, 0x80, 0x20);
+		vgPointf(exp->position.x, exp->position.y);
+
+		/* render circumfrence  */
+		float angleStep = 360.0f / VF_EXPRENDER_VERTS;
+		for (int j = 0; j < VF_EXPRENDER_VERTS; j++)
+		{
+			/* get circle verts */
+			vfVector vert1 = polarToCartesian(exp->shockwaveDistance,
+				angleStep * (j)     * 0.0174533f);
+			vfVector vert2 = polarToCartesian(exp->shockwaveDistance,
+				angleStep * (j + 1) * 0.0174533f);
+			
+			/* offset by explosion position */
+			vert1 = vectorAdd(vert1, exp->position);
+			vert2 = vectorAdd(vert2, exp->position);
+
+			/* render line */
+			vgLinef(vert1.x, vert1.y, vert2.x, vert2.y);
+		}
+	}
+
 	vgLineSize(1.0f);
 }
 
@@ -3580,6 +3636,8 @@ VFAPI vfExplosion* vfCreateExplosionV(vfVector position, vfHandle behavior)
 			exp->affectEnts = NULL;
 			exp->spawnAge = _tickCount;
 
+			/* set field and increment */
+			_expBufferField[i] = 1;
 			_expCount++;
 			return exp;
 		}
@@ -3603,7 +3661,7 @@ VFAPI vfExplosion* vfCreateExplosionE(vfEntity* source, vfHandle behavior)
 VFAPI void vfDestroyExplosion(vfExplosion* toDestroy)
 {
 	/* get index and free */
-	int index = _expBuffer - toDestroy;
+	int index = toDestroy - _expBuffer;
 	if (toDestroy->affectEnts)
 		vFree(toDestroy->affectEnts);
 
