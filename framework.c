@@ -1951,9 +1951,6 @@ static void getPartitionBoundEntIndexes(int partX, int partY,
 		/* on collision, skip */
 		if (collisionResult) continue;
 
-		/* if bound has no entity, skip */
-		if (!_bqBuffer[checkIndex].staticData.entity) continue;
-
 		/* add index and increment bufferuse */
 		if (*bufferUse + 1 > bufferMax) return;
 		indexBuffer[*bufferUse] = checkIndex;
@@ -1998,16 +1995,79 @@ static void getAllAffected(vfExplosion* source,
 	}
 
 	/* allocate explosion entity buffer */
-	if (source->affectEnts)
-		vFree(source->affectEnts);
-	source->affectEnts = vAlloc(sizeof(vfEntity*) * buffUse, FALSE);
+	if (source->pushBounds)
+		vFree(source->pushBounds);
+	source->pushBounds = vAlloc(sizeof(vfBound*) * buffUse, FALSE);
 
 	/* populate entity buffer */
 	for (int i = 0; i < buffUse; i++)
 	{
-		source->affectEnts[i] = _bBuffer[indexBuffer[i]].entity;
+		source->pushBounds[i] = _bBuffer + indexBuffer[i];
 	}
-	source->affectCount = buffUse;
+	source->boundCount = buffUse;
+}
+
+static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
+	float angle, float dist, float falloff, int* collisionCount)
+{
+	/* get stepcount */
+	int stepCount = dist / VF_EXPOCCLUSION_STEP;
+
+	/* get walk vector */
+	vfVector moveVect = polarToCartesian(VF_EXPOCCLUSION_STEP,
+		(angle + 180.0f) * 0.0174533f);
+
+	/* walk and get collision count */
+	int cCount = 0;
+	vfVector checkPosition = source->position;
+	float percent = 1.0f; /* percent accumulator */
+
+	/* occlusion buffer, a bound can't occlude more than once */
+	int occlusionIndexes[VF_EXPOCCLUSION_MAX] = { 0 };
+
+	for (int i = 0; i < stepCount; i++)
+	{
+		/* check all bounds */
+		for (int j = 0; j < source->boundCount; j++)
+		{
+			/* on max cCount, break */
+			if (cCount >= VF_EXPOCCLUSION_MAX) break;
+
+			/* on missing bound, skip */
+			if (source->pushBounds[j] == NULL) continue;
+
+			/* on same bound, continue */
+			if (source->pushBounds[j] == target) continue;
+
+			/* on collide, mark */
+			if (vfCheckPointOverlap(checkPosition,
+				source->pushBounds[j], VF_EXPOCCLUSION_LEN))
+			{
+				/* check all pre-occlusions, on collision, continue */
+				for (int k = 0; k < cCount; k++)
+				{
+					if (occlusionIndexes[k] == j) continue;
+				}
+
+				/* mark and increment */
+				occlusionIndexes[cCount] = j;
+				cCount++;
+				percent *= falloff;
+			}
+		}
+
+		/* on max cCount, break */
+		if (cCount >= VF_EXPOCCLUSION_MAX)
+
+		/* on percent = 0, end */
+		if (percent == 0.0f) break;
+
+		/* increment walk */
+		checkPosition = vectorAdd(checkPosition, moveVect);
+	}
+
+	*collisionCount = cCount;
+	return percent;
 }
 
 static void updateExplosions(void)
@@ -2047,12 +2107,15 @@ static void updateExplosions(void)
 		exp->shockwaveDistance += speedActual;
 
 		/* check all affected entities */
-		for (int j = 0; j < exp->affectCount; j++)
+		for (int j = 0; j < exp->boundCount; j++)
 		{
-			/* get entity to push */
-			vfEntity* pushEnt = exp->affectEnts[j];
+			/* if already collided or not exists, skip */
+			if (exp->pushBounds[j] == NULL) continue;
 
-			/* if already collided, skip */
+			/* get entity to push */
+			vfEntity* pushEnt = exp->pushBounds[j]->entity;
+
+			/* if no entity, skip */
 			if (pushEnt == NULL) continue;
 
 			/* get offset */
@@ -2073,8 +2136,20 @@ static void updateExplosions(void)
 				roundf(dist) > roundf(exp->previousShockwaveDistance
 				- bhv.shockwaveThickness))
 			{
-				/* get angle and apply variation */
+				/* get angle */
 				float angle = atan2f(distY, distX) * 57.2958;
+
+				/* check for occlusion (if possible) */
+				float occlusionFalloff = 1.0f;
+				int collisions = 0;
+				if (bhv.useOcclusion)
+					occlusionFalloff = getOcclusionFalloff(exp,
+						exp->pushBounds[j],
+						angle, dist, bhv.occlusionFalloff,
+						&collisions);
+				printf("%f\n", occlusionFalloff);
+				
+				/* apply pushforce variation */
 				angle += seededRandomFLOAT(exp->spawnAge + j,
 					bhv.pushAngleVariation);
 
@@ -2091,9 +2166,18 @@ static void updateExplosions(void)
 					exp->age));
 				pushfactor = max(0.0f, pushfactor);
 
+				/* account for mass */
+				float massDampen = (pushEnt->physics.mass *
+					bhv.pushMassScale);
+				massDampen = max(0, massDampen);
+
+				/* get pushvector magnitude */
+				float pushMag = (speedActual * pushfactor) - massDampen;
+				pushMag = max(0, pushMag);
+
 				/* convert back to cartesian and apply vector to entity */
-				vfVector pushVector = polarToCartesian(speedActual * 
-					pushfactor, angle * 0.0174533f);
+				vfVector pushVector = polarToCartesian(pushMag,
+					angle * 0.0174533f);
 
 				pushEnt->physics.velocity.x -= pushVector.x;
 				pushEnt->physics.velocity.y -= pushVector.y;
@@ -2103,7 +2187,7 @@ static void updateExplosions(void)
 					bhv.pushCallback(exp, pushEnt);
 
 				/* once collided, now mark as null */
-				exp->affectEnts[j] = NULL;
+				exp->pushBounds[j] = NULL;
 			} /* PUSH CHECK END */
 		} /* ENT CHECK LOOP END */
 
@@ -3666,8 +3750,8 @@ VFAPI vfExplosion* vfCreateExplosionV(vfVector position, vfHandle behavior)
 			exp->previousShockwaveDistance = 0;
 
 			exp->source = NULL;
-			exp->affectCount = 0;
-			exp->affectEnts = NULL;
+			exp->boundCount = 0;
+			exp->pushBounds = NULL;
 			exp->spawnAge = _tickCount;
 
 			/* set field and increment */
@@ -3696,8 +3780,8 @@ VFAPI void vfDestroyExplosion(vfExplosion* toDestroy)
 {
 	/* get index and free */
 	int index = toDestroy - _expBuffer;
-	if (toDestroy->affectEnts)
-		vFree(toDestroy->affectEnts);
+	if (toDestroy->pushBounds)
+		vFree(toDestroy->pushBounds);
 
 	/* clear field and decrement count */
 	_expBufferField[index] = 0;

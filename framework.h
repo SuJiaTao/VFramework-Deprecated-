@@ -109,10 +109,13 @@
 #define VF_PROJ_PRECISION 10.0f
 #define VF_PROJ_MAXSTEPS  0x80
 
-#define VF_EXPBEHAVIORS_MAX 0x80
-#define VF_EXPLOSIONS_MAX   0x800
-#define VF_EXPAFFECT_MAX    0x200
-#define VF_EXPRENDER_VERTS  0xA
+#define VF_EXPBEHAVIORS_MAX  0x80
+#define VF_EXPLOSIONS_MAX    0x800
+#define VF_EXPAFFECT_MAX     0x200
+#define VF_EXPRENDER_VERTS   0x10
+#define VF_EXPOCCLUSION_STEP 0x40
+#define VF_EXPOCCLUSION_LEN  0x10
+#define VF_EXPOCCLUSION_MAX  0x10
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
@@ -304,8 +307,12 @@ typedef struct vfExplosionBehavior
 {
 	float radius; /* max affected radius */
 	
-	vfFlag useMinSpeed : 1; /* minumum speed requirement */
-	vfFlag useMaxLife  : 1; /* max life requirement      */
+	vfFlag useMinSpeed  : 1; /* minumum speed requirement  */
+	vfFlag useMaxLife   : 1; /* max life requirement       */
+	vfFlag useMassScale : 1; /* account for entity mass    */
+	vfFlag useOcclusion : 1; /* check if ent is obstructed */
+
+	float occlusionFalloff;   /* pushfalloff per occlusion */
 
 	float minShockwaveSpeed;  /* minumum allowed speed  */
 	vfLifeTime maxLife;       /* max time allowed alive */
@@ -322,6 +329,8 @@ typedef struct vfExplosionBehavior
 	float pushFalloff; /* factor falloff per shockwave step */
 	float pushFalloffVariation; /* variation on falloff     */
 
+	float pushMassScale; /* what percent of mass to account for */
+
 	EXPLOSIONCREATECALLBACK createCallback; /* calls on create */
 	EXPLOSIONPUSHCALLBACK   pushCallback;   /* calls on push   */
 } vfExplosionBehavior;
@@ -336,8 +345,8 @@ typedef struct vfExplosion
 	vfLifeTime spawnAge; /* time of creation */
 	vfLifeTime age;      /* explosion age */
 
-	int affectCount;      /* number of affected entities */
-	struct vfEntity** affectEnts; /* entities affected    */
+	int boundCount;      /* number of affected bounds */
+	struct vfBound** pushBounds; /* entities affected    */
 
 	float shockwaveDistance; /* distance shockwave has travelled */
 	float previousShockwaveDistance; /* distance of wave before  */
