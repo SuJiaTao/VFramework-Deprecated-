@@ -302,7 +302,13 @@ typedef struct vfProjectile
 
 typedef struct vfExplosionBehavior
 {
-	float radius;             /* max affected radius */
+	float radius; /* max affected radius */
+	
+	vfFlag useMinSpeed : 1; /* minumum speed requirement */
+	vfFlag useMaxLife  : 1; /* max life requirement      */
+
+	float minShockwaveSpeed;  /* minumum allowed speed  */
+	vfLifeTime maxLife;       /* max time allowed alive */
 
 	float shockwaveSpeed;          /* distance per move step    */
 	float shockwaveSpeedVariation; /* shockwave speed variation */
