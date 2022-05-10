@@ -2065,7 +2065,10 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 				/* apply dampening */
 				float falloffActual = max(0.0f, (1.0f - falloff));
 				if (source->pushBounds[j]->entity)
+				{
 					falloffActual *= max(0.0f, entFalloff);
+				}
+				
 				percent *= falloffActual;
 			}
 		}
@@ -2165,8 +2168,6 @@ static void updateExplosions(void)
 						bhv.occlusionEntDampen, &collisions);
 				}
 
-				printf("%f\n", occlusionFalloff);
-				
 				/* apply pushforce variation */
 				angle += seededRandomFLOAT(exp->spawnAge + j,
 					bhv.pushAngleVariation);
