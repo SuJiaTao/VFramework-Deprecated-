@@ -108,6 +108,7 @@ static int _expBCount;
 static vfExplosion* _expBuffer;
 static field* _expBufferField;
 static int _expCount;
+static int* _expPushBuffer;
 
 /* boundQuad struct definition */
 typedef struct boundQuad
@@ -1961,8 +1962,7 @@ static void getPartitionBoundEntIndexes(int partX, int partY,
 static void getAllAffected(vfExplosion* source,
 	vfExplosionBehavior bhv)
 {
-	/* buffer for all entity indexes */
-	int indexBuffer[VF_EXPAFFECT_MAX];
+	/* set bufuse for pushbuffer */
 	int buffUse = 0;
 
 	/* get minimum explosion partitions */
@@ -1990,7 +1990,7 @@ static void getAllAffected(vfExplosion* source,
 		for (int j = minpartY; j < minpartY + partRange; j++)
 		{
 			getPartitionBoundEntIndexes(i, j,
-				indexBuffer, &buffUse, VF_EXPAFFECT_MAX);
+				_expPushBuffer, &buffUse, VF_EXPPUSH_MAX);
 		}
 	}
 
@@ -2002,7 +2002,7 @@ static void getAllAffected(vfExplosion* source,
 	/* populate entity buffer */
 	for (int i = 0; i < buffUse; i++)
 	{
-		source->pushBounds[i] = _bBuffer + indexBuffer[i];
+		source->pushBounds[i] = _bBuffer + _expPushBuffer[i];
 	}
 	source->boundCount = buffUse;
 }
@@ -2034,6 +2034,7 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 	{
 		/* get point partition */
 		int pPartX, pPartY;
+
 		if (checkPosition.x > 0)
 			pPartX = checkPosition.x / _partitionSize;
 		else
@@ -2061,7 +2062,7 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 		{
 			/* on max cCount, break */
 			if (cCount >= VF_EXPOCCLUSION_MAX ||
-				(cCount >= bhv.maxLife && bhv.useOcclusionMinMax)) break;
+				(cCount >= bhv.occlusionsMax && bhv.useOcclusionMinMax)) break;
 
 			/* get bound */
 			vfBound* checkBound = _bBuffer + checkPart->bqIndexes[j];
@@ -2507,6 +2508,8 @@ VFAPI void vfInit(void)
 		TRUE);
 	_expBufferField = vAlloc(sizeof(field) * VF_EXPLOSIONS_MAX,
 		TRUE);
+	_expPushBuffer = vAlloc(sizeof(int) * VF_EXPPUSH_MAX,
+		FALSE);
 
 	/* init module main thread */
 	_killSignal   = FALSE;
@@ -2534,6 +2537,7 @@ VFAPI void vfTerminate(void)
 	vFree(_tFinalBuffer);
 	vFree(_projBuffer);
 	vFree(_expBuffer);
+	vFree(_expPushBuffer);
 
 	/* free all entity attribute data */
 	for (int i = 0; i < VF_BUFFER_SIZE; i++)
