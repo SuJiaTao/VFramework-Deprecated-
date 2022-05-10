@@ -2075,7 +2075,7 @@ static void updateExplosions(void)
 			{
 				/* get angle and apply variation */
 				float angle = atan2f(distY, distX) * 57.2958;
-				angle += seededRandomFLOAT(exp->spawnAge,
+				angle += seededRandomFLOAT(exp->spawnAge + j,
 					bhv.pushAngleVariation);
 
 				/* calculate pushfactor */
@@ -2085,7 +2085,7 @@ static void updateExplosions(void)
 
 				/* calculate falloff and apply falloff */
 				float pushfalloff = bhv.pushFalloff +
-					seededRandomFLOAT(exp->spawnAge,
+					seededRandomFLOAT(exp->spawnAge + j,
 						bhv.pushFactorVariation);
 				pushfactor *= max(1.0f, powf(1.0f - pushfalloff,
 					exp->age));
