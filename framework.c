@@ -2008,7 +2008,8 @@ static void getAllAffected(vfExplosion* source,
 }
 
 static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
-	float angle, float dist, float falloff, int* collisionCount)
+	float angle, float dist, float falloff, float entFalloff,
+	int* collisionCount)
 {
 	/* get stepcount */
 	int stepCount = dist / VF_EXPOCCLUSION_STEP;
@@ -2044,15 +2045,28 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 				source->pushBounds[j], VF_EXPOCCLUSION_LEN))
 			{
 				/* check all pre-occlusions, on collision, continue */
+				int alreadyOccluded = 0;
 				for (int k = 0; k < cCount; k++)
 				{
-					if (occlusionIndexes[k] == j) continue;
+					if (occlusionIndexes[k] == j)
+					{
+						alreadyOccluded = 1;
+						break;
+					}
 				}
+
+				/* on already occluded, skip */
+				if (alreadyOccluded) continue;
 
 				/* mark and increment */
 				occlusionIndexes[cCount] = j;
 				cCount++;
-				percent *= falloff;
+
+				/* apply dampening */
+				float falloffActual = max(0.0f, (1.0f - falloff));
+				if (source->pushBounds[j]->entity)
+					falloffActual *= max(0.0f, entFalloff);
+				percent *= falloffActual;
 			}
 		}
 
@@ -2142,11 +2156,15 @@ static void updateExplosions(void)
 				/* check for occlusion (if possible) */
 				float occlusionFalloff = 1.0f;
 				int collisions = 0;
+				
 				if (bhv.useOcclusion)
+				{
 					occlusionFalloff = getOcclusionFalloff(exp,
 						exp->pushBounds[j],
 						angle, dist, bhv.occlusionFalloff,
-						&collisions);
+						bhv.occlusionEntDampen, &collisions);
+				}
+
 				printf("%f\n", occlusionFalloff);
 				
 				/* apply pushforce variation */
@@ -2172,7 +2190,8 @@ static void updateExplosions(void)
 				massDampen = max(0, massDampen);
 
 				/* get pushvector magnitude */
-				float pushMag = (speedActual * pushfactor) - massDampen;
+				float pushMag = (speedActual * pushfactor * occlusionFalloff)
+					- massDampen;
 				pushMag = max(0, pushMag);
 
 				/* convert back to cartesian and apply vector to entity */

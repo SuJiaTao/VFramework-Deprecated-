@@ -312,7 +312,8 @@ typedef struct vfExplosionBehavior
 	vfFlag useMassScale : 1; /* account for entity mass    */
 	vfFlag useOcclusion : 1; /* check if ent is obstructed */
 
-	float occlusionFalloff;   /* pushfalloff per occlusion */
+	float occlusionFalloff;   /* pushfalloff per occlusion       */
+	float occlusionEntDampen; /* occluding entity falloff dampen */
 
 	float minShockwaveSpeed;  /* minumum allowed speed  */
 	vfLifeTime maxLife;       /* max time allowed alive */
