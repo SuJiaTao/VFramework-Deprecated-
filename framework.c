@@ -2008,7 +2008,7 @@ static void getAllAffected(vfExplosion* source,
 }
 
 static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
-	float angle, float dist, float falloff, float entFalloff,
+	float angle, float dist, vfExplosionBehavior bhv,
 	int* collisionCount)
 {
 	/* get stepcount */
@@ -2017,6 +2017,10 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 	/* get walk vector */
 	vfVector moveVect = polarToCartesian(VF_EXPOCCLUSION_STEP,
 		(angle + 180.0f) * 0.0174533f);
+	
+	/* get falloff values */
+	float falloff = bhv.occlusionFalloff;
+	float entFalloff = bhv.occlusionEntDampen;
 
 	/* walk and get collision count */
 	int cCount = 0;
@@ -2056,7 +2060,8 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 		for (int j = 0; j < checkPart->bqCount; j++)
 		{
 			/* on max cCount, break */
-			if (cCount >= VF_EXPOCCLUSION_MAX) break;
+			if (cCount >= VF_EXPOCCLUSION_MAX ||
+				(cCount >= bhv.maxLife && bhv.useOcclusionMinMax)) break;
 
 			/* get bound */
 			vfBound* checkBound = _bBuffer + checkPart->bqIndexes[j];
@@ -2101,7 +2106,8 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 		}
 
 		/* on max cCount, break */
-		if (cCount >= VF_EXPOCCLUSION_MAX)
+		if (cCount >= VF_EXPOCCLUSION_MAX ||
+			(cCount >= bhv.maxLife && bhv.useOcclusionMinMax)) break;
 
 		/* on percent = 0, end */
 		if (percent == 0.0f) break;
@@ -2109,6 +2115,10 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 		/* increment walk */
 		checkPosition = vectorAdd(checkPosition, moveVect);
 	}
+
+	/* on use min, set cCount */
+	if (bhv.useOcclusionMinMax &&
+		cCount < bhv.occlusionsMin) percent = 1.0f;
 
 	*collisionCount = cCount;
 	return percent;
@@ -2191,8 +2201,7 @@ static void updateExplosions(void)
 				{
 					occlusionFalloff = getOcclusionFalloff(exp,
 						exp->pushBounds[j],
-						angle, dist, bhv.occlusionFalloff,
-						bhv.occlusionEntDampen, &collisions);
+						angle, dist, bhv, &collisions);
 				}
 
 				/* apply pushforce variation */
