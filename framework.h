@@ -113,9 +113,9 @@
 #define VF_EXPLOSIONS_MAX    0x800
 #define VF_EXPAFFECT_MAX     0x200
 #define VF_EXPRENDER_VERTS   0x10
-#define VF_EXPOCCLUSION_STEP 0x40
-#define VF_EXPOCCLUSION_LEN  0x10
-#define VF_EXPOCCLUSION_MAX  0x10
+#define VF_EXPOCCLUSION_STEP 0x80
+#define VF_EXPOCCLUSION_LEN  0x20
+#define VF_EXPOCCLUSION_MAX  0x5
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)

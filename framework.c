@@ -2024,31 +2024,58 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 	float percent = 1.0f; /* percent accumulator */
 
 	/* occlusion buffer, a bound can't occlude more than once */
-	int occlusionIndexes[VF_EXPOCCLUSION_MAX] = { 0 };
+	vfBound* occlusions[VF_EXPOCCLUSION_MAX] = { NULL };
 
 	for (int i = 0; i < stepCount; i++)
 	{
+		/* get point partition */
+		int pPartX, pPartY;
+		if (checkPosition.x > 0)
+			pPartX = checkPosition.x / _partitionSize;
+		else
+			pPartX = floorf(checkPosition.x / _partitionSize);
+
+		if (checkPosition.y > 0)
+			pPartY = checkPosition.y / _partitionSize;
+		else
+			pPartY = floorf(checkPosition.y / _partitionSize);
+
+		/* get partition */
+		partition* checkPart = NULL;
+		for (int k = 0; k < _partitionCount; k++)
+		{
+			checkPart = _partBuff + k;
+			if (checkPart->x == pPartX &&
+				checkPart->y == pPartY) break;
+		}
+
+		/* if no partition, skip */
+		if (checkPart == NULL) continue;
+		
 		/* check all bounds */
-		for (int j = 0; j < source->boundCount; j++)
+		for (int j = 0; j < checkPart->bqCount; j++)
 		{
 			/* on max cCount, break */
 			if (cCount >= VF_EXPOCCLUSION_MAX) break;
 
+			/* get bound */
+			vfBound* checkBound = _bBuffer + checkPart->bqIndexes[j];
+
 			/* on missing bound, skip */
-			if (source->pushBounds[j] == NULL) continue;
+			if (checkBound == NULL) continue;
 
 			/* on same bound, continue */
-			if (source->pushBounds[j] == target) continue;
+			if (checkBound == target) continue;
 
 			/* on collide, mark */
 			if (vfCheckPointOverlap(checkPosition,
-				source->pushBounds[j], VF_EXPOCCLUSION_LEN))
+				checkBound, VF_EXPOCCLUSION_LEN))
 			{
 				/* check all pre-occlusions, on collision, continue */
 				int alreadyOccluded = 0;
 				for (int k = 0; k < cCount; k++)
 				{
-					if (occlusionIndexes[k] == j)
+					if (occlusions[k] == checkBound)
 					{
 						alreadyOccluded = 1;
 						break;
@@ -2059,17 +2086,17 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 				if (alreadyOccluded) continue;
 
 				/* mark and increment */
-				occlusionIndexes[cCount] = j;
+				occlusions[cCount] = checkBound;
 				cCount++;
 
 				/* apply dampening */
-				float falloffActual = max(0.0f, (1.0f - falloff));
-				if (source->pushBounds[j]->entity)
+				float falloffActual = max(0.0f, falloff);
+				if (checkBound->entity)
 				{
 					falloffActual *= max(0.0f, entFalloff);
 				}
 				
-				percent *= falloffActual;
+				percent *= (1.0f - falloffActual);
 			}
 		}
 
