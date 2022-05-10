@@ -2052,6 +2052,9 @@ static void updateExplosions(void)
 			/* get entity to push */
 			vfEntity* pushEnt = exp->affectEnts[j];
 
+			/* if already collided, skip */
+			if (pushEnt == NULL) continue;
+
 			/* get offset */
 			float distX = exp->position.x - pushEnt->transform->position.x;
 			float distY = exp->position.y - pushEnt->transform->position.y;
@@ -2098,6 +2101,9 @@ static void updateExplosions(void)
 				/* try callback */
 				if (bhv.pushCallback)
 					bhv.pushCallback(exp, pushEnt);
+
+				/* once collided, now mark as null */
+				exp->affectEnts[j] = NULL;
 			} /* PUSH CHECK END */
 		} /* ENT CHECK LOOP END */
 
