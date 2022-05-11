@@ -2062,7 +2062,7 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 		{
 			/* on max cCount, break */
 			if (cCount >= VF_EXPOCCLUSION_MAX ||
-				(cCount >= bhv.occlusionsMax && bhv.useOcclusionMinMax)) break;
+				(cCount >= bhv.occlusionsMax && bhv.useOcclusionMax)) break;
 
 			/* get bound */
 			vfBound* checkBound = _bBuffer + checkPart->bqIndexes[j];
@@ -2108,7 +2108,7 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 
 		/* on max cCount, break */
 		if (cCount >= VF_EXPOCCLUSION_MAX ||
-			(cCount >= bhv.maxLife && bhv.useOcclusionMinMax)) break;
+			(cCount >= bhv.maxLife && bhv.useOcclusionMax)) break;
 
 		/* on percent = 0, end */
 		if (percent == 0.0f) break;
@@ -2116,10 +2116,6 @@ static float getOcclusionFalloff(vfExplosion* source, vfBound* target,
 		/* increment walk */
 		checkPosition = vectorAdd(checkPosition, moveVect);
 	}
-
-	/* on use min, set cCount */
-	if (bhv.useOcclusionMinMax &&
-		cCount < bhv.occlusionsMin) percent = 1.0f;
 
 	*collisionCount = cCount;
 	return percent;
