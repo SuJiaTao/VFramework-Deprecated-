@@ -148,6 +148,8 @@ typedef PROJTILMAXAGECALLBACK PROJTILESTOPMOVECALLBACK;
 typedef void (*EXPLOSIONCREATECALLBACK)(struct vfExplosion* explosion);
 typedef void (*EXPLOSIONPUSHCALLBACK)(struct vfExplosion* source,
 	struct vfEntity* pushed, float angle);
+typedef int (*EXPLOSIONPUSHOVERRIDEFUNC)(struct vfExplosion* source,
+	struct vfBound* toPush);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector
@@ -307,11 +309,13 @@ typedef struct vfExplosionBehavior
 {
 	float radius; /* max affected radius */
 	
-	vfFlag useMinSpeed  : 1; /* minumum speed requirement  */
-	vfFlag useMaxLife   : 1; /* max life requirement       */
-	vfFlag useMassScale : 1; /* account for entity mass    */
-	vfFlag useOcclusion : 1; /* check if ent is obstructed */
-	vfFlag useOcclusionMax : 1; /* use min/max params   */
+	vfFlag useMinSpeed  : 1; /* minumum speed requirement     */
+	vfFlag useMaxLife   : 1; /* max life requirement          */
+	vfFlag useMassScale : 1; /* account for entity mass       */
+	vfFlag useOcclusion : 1; /* check if ent is obstructed    */
+	vfFlag useOcclusionMax : 1; /* set occlusion limit        */
+	vfFlag usePushOverride : 1; /* use push override function */
+
 
 	float occlusionFalloff;   /* pushfalloff per occlusion       */
 	float occlusionEntDampen; /* occluding entity falloff dampen */
@@ -336,6 +340,12 @@ typedef struct vfExplosionBehavior
 
 	EXPLOSIONCREATECALLBACK createCallback; /* calls on create */
 	EXPLOSIONPUSHCALLBACK   pushCallback;   /* calls on push   */
+
+	/* the push override function is a user-defined push calculation */
+	/* if it returns 1, the bound is pushed using the standard bhv   */
+	/* parameters, if it returns 0, the push is discarded, and the   */
+	/* user is free to do whatever with the passed objects           */
+	EXPLOSIONPUSHOVERRIDEFUNC pushOverride;
 } vfExplosionBehavior;
 
 typedef struct vfExplosion

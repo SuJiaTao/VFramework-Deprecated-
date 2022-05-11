@@ -2187,6 +2187,19 @@ static void updateExplosions(void)
 				roundf(dist) > roundf(exp->previousShockwaveDistance
 				- bhv.shockwaveThickness))
 			{
+				/* check for push override */
+				if (bhv.usePushOverride)
+				{
+					/* call push override and check result */
+					int pushResult = 1;
+					if (bhv.pushOverride)
+						pushResult = bhv.pushOverride(exp,
+							exp->pushBounds[j]);
+
+					/* on false, discard push */
+					if (pushResult == 0) continue;
+				}
+
 				/* get angle */
 				float angle = atan2f(distY, distX) * 57.2958;
 
@@ -2194,6 +2207,7 @@ static void updateExplosions(void)
 				float occlusionFalloff = 1.0f;
 				int collisions = 0;
 				
+				/* apply occlusion detection */
 				if (bhv.useOcclusion)
 				{
 					occlusionFalloff = getOcclusionFalloff(exp,
@@ -3141,9 +3155,9 @@ VFAPI void vfRenderBounds(void)
 		/* on unused, skip */
 		if (!_expBufferField[i]) continue;
 
-		/* render center point */
-		vgColor3(0xFF, 0x80, 0x20);
-		vgPointf(exp->position.x, exp->position.y);
+		/* set circumference color and line size */
+		vgLineSize(2.5f);
+		vgColor3(0x80, 0x80, 0x20);
 
 		/* render OUTER circumfrence  */
 		float angleStep = 360.0f / VF_EXPRENDER_VERTS;
@@ -3180,6 +3194,24 @@ VFAPI void vfRenderBounds(void)
 
 			/* render line */
 			vgLinef(vert1.x, vert1.y, vert2.x, vert2.y);
+		}
+
+		/* set pushent color and line size */
+		vgColor3(0x20, 0x80, 0xFF);
+		vgLineSize(1.0f);
+
+		/* render all pushents lines */
+		for (int i = 0; i < exp->boundCount; i++)
+		{
+			if (exp->pushBounds[i] == NULL) continue;
+
+			/* get bq index*/
+			int bIndex = exp->pushBounds[i] - _bBuffer;
+			boundQuad* bq = _bqBuffer + bIndex;
+
+			/* render from average */
+			vgLinef(exp->position.x, exp->position.y,
+				bq->average.x, bq->average.y);
 		}
 	}
 
