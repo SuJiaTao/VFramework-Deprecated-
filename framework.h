@@ -115,7 +115,7 @@
 #define VF_EXPRENDER_VERTS   0x10
 #define VF_EXPOCCLUSION_STEP 0x80
 #define VF_EXPOCCLUSION_LEN  0x20
-#define VF_EXPOCCLUSION_MAX  0x5
+#define VF_EXPOCCLUSION_MAX  0x10
 
 #define VECT(x, y)             vfCreateVector(x, y)
 #define COLOR(r, g, b)         vfCreateColor(r, g, b, 255)
@@ -147,7 +147,7 @@ typedef void (*PROJTILMAXAGECALLBACK)(struct vfProjectile* projectile);
 typedef PROJTILMAXAGECALLBACK PROJTILESTOPMOVECALLBACK;
 typedef void (*EXPLOSIONCREATECALLBACK)(struct vfExplosion* explosion);
 typedef void (*EXPLOSIONPUSHCALLBACK)(struct vfExplosion* source,
-	struct vfEntity* affected);
+	struct vfEntity* pushed, float angle);
 
 /* STRUCTURE DEFINITIONS */
 typedef struct vfVector

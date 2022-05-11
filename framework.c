@@ -2237,7 +2237,7 @@ static void updateExplosions(void)
 
 				/* try callback */
 				if (bhv.pushCallback)
-					bhv.pushCallback(exp, pushEnt);
+					bhv.pushCallback(exp, pushEnt, angle);
 
 				/* once collided, now mark as null */
 				exp->pushBounds[j] = NULL;
